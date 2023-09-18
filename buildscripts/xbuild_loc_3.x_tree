@@ -1,9 +1,10 @@
 #!/bin/bash
+export CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-$(python3 -c "import os;print(os.cpu_count())")}
 
 # rapid-build script for mcstas-kernel dev:
 
 
-git checkout mccode-3
+git checkout main
 git pull
 
 # Ensure our 3rd party modules are in place and updated
@@ -57,9 +58,6 @@ fi
 
 ./mkdist mcxtrace 3.x-dev "" "" deb64 "" -- justinst
 ./mkdist mcxtrace-comps 3.x-dev "" "" deb64 "" -- justinst
-# can be out-commented after the first build iteration:
-./mkdist mcxtrace-tools-perl-cmdline 3.x-dev tools/Legacy-Perl-cmdline/ "" deb64 "" -- justinst
-./mkdist mcxtrace-tools-perl 3.x-dev tools/Legacy-Perl/ "" deb64 "" -- justinst
 ./mkdist mcxtrace-tools-python-mxgui 3.x-dev tools/Python/mcgui/ "" deb64 "" -- justinst
 ./mkdist mcxtrace-tools-python-mxrun 3.x-dev tools/Python/mcrun/ "" deb64 "" -- justinst
 ./mkdist mcxtrace-tools-python-mccodelib 3.x-dev tools/Python/mccodelib/ "" deb64 "" -- justinst

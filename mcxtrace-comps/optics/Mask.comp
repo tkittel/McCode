@@ -1,14 +1,13 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
+* McXtrace, x-ray tracing package
 *         Copyright, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
-*         University of Copenhagen, Copenhagen, Denmark
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Mask
 *
-* %I
+* %Identification
 *
 * Written by: Erik Knudsen 
 * Date: March  2014
@@ -18,7 +17,7 @@
 *
 * A masking image object
 *
-* %D
+* %Description
 * The Mask component takes an image as input either as an standard image file in png or pnm format, or as an ascii file (see below for format),
 * and uses the image as a mask. For instance as a manner of measuring resolution for imaging applications.
 * If the image is supplied as a png or pnm file, they interpretation of the pixels varies depending on the file. If the image is grayscale the pixel values are directly mapped
@@ -42,10 +41,11 @@
 * by adding "-DUSE_PNG=1 -lpng" to 1) the MCXTRACE_CFLAGS environment variable or 2) to the compiler flags textbox in the GUI. Open File->Configuration and edit the textbox. 
 *
 * The virtual option of the Mask, is intended as a help to use a png-image as a grayscale distribution. If the virtual flag is set, rays are propagated to the mask plane
-* and the pixel value at the intersection point is read, but the rays remain unaffected. The pixel value is stored in the variable named in the string maskvar. This should be
-* a USERVAR set from the instrument file.
+* and the pixel value at the intersection point is read, but the rays remain unaffected. The pixel value is stored in the variable named in the string maskvar. This should be a USERVAR set from the instrument file.
+*
+* Example: Mask(xwidth=0.1, yheight=0.1, mask=Test_Mask_input_file.mask)
 * 
-* %P
+* %Parameters
 * Input parameters:
 * xwidth: [m]   Width of the masking object
 * yheight:[m]   Height of the masking object
@@ -54,12 +54,12 @@
 * virtual:[ ]   Mask does not affect the x-ray, but does still read the pixel value of the pixel hit and stores it in masking.
 * Output parameters:
 * maskvar: [ ]  Opacity/transmission value.
-* %E
+* %End
 *******************************************************************************/
 
 DEFINE COMPONENT Mask
 DEFINITION PARAMETERS ()
-SETTING PARAMETERS (xwidth, yheight, string mask, invert=0, virtual=0)
+SETTING PARAMETERS (xwidth=0.1, yheight=0.1, string mask="Test_Mask_input_file.mask", invert=0, virtual=0)
 OUTPUT PARAMETERS ()
 //DEPENDENCY "-lpng -DUSE_PNG"
 

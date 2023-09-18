@@ -38,6 +38,20 @@ function [comps, fig] = mcdisplay(varargin)
     case {'-png' '-pdf' '-fig' '-tif' '-jpg' '-eps'}
       save_as = [ save_as ' ' this_arg ];
       continue
+    case {'-h','--help'}
+          % display help and exit
+          disp(' mcdisplay instr')
+          disp('    displays the given McCode model with its defaults/current parameters.')
+          disp(' mcdisplay instr name1=value1 ...')
+          disp('    displays the given McCode model with given parameters.')
+          disp(' mcdisplay [-png|-jpg|-fig|-eps|-pdf|-tif] instr name1=value1 ...')
+          disp('    same as above, and specifies an output file format to generate')
+          disp('    Possible save_as are -png -pdf -fig -tif -jpg -eps')
+          disp(' mcdisplay --inspect=COMP instr name1=value1 ...')
+          disp('    same as above, and only plot component names that match "inspect, given as')
+          disp('                a single component word for partial match, such as Monitor')
+          disp('                a component interval such as Monok:Sample or 2:10 or 2:end')
+          exit
     end
     if strncmp(this_arg, '--inspect=', 10)  % get option for inspection 
       match=this_arg(11:end); 
@@ -224,7 +238,7 @@ function [comps, fig] = mcdisplay(varargin)
   daspect([1 1 1]);
   box on;
   a0 = gca;
-  if exist ("OCTAVE_VERSION", "builtin")
+  if exist ('OCTAVE_VERSION', 'builtin')
     legend show
   end
 
@@ -380,7 +394,7 @@ function plot_contextmenu(a, name, pars)
   uimenu(uicm, 'Label','Toggle grid', 'Callback','grid');
   uimenu(uicm, 'Label','Toggle aspect ratio','Callback','if all(daspect == 1) daspect(''auto''); else daspect([ 1 1 1 ]); end');
   uimenu(uicm, 'Label','Toggle Perspective','Callback', 'if strcmp(get(gca,''Projection''),''orthographic'')  set(gca,''Projection'',''perspective''); else set(gca,''Projection'',''orthographic''); end');
-  if exist ("OCTAVE_VERSION", "builtin")
+  if exist ('OCTAVE_VERSION', 'builtin')
   uimenu(uicm, 'Label','Toggle legend','Callback','legend(''toggle'');');
   else
   uimenu(uicm, 'Label','Toggle legend','Callback','tmp_h=legend(''toggle''); set(tmp_h,''Interpreter'',''None''); if strcmp(get(tmp_h,''Visible''),''off''), legend(gca,''off''); end; clear tmp_h;');
@@ -406,7 +420,7 @@ function plot_contextmenu(a, name, pars)
       if ndims(a) >= 2
         uimenu(uicmf, 'Label', 'Rotate on/off', 'Callback','rotate3d');
       end
-      if exist ("OCTAVE_VERSION", "builtin")
+      if exist ('OCTAVE_VERSION', 'builtin')
       uimenu(uicmf, 'Label','Legend on/off', 'Callback','legend(''toggle'');');
       else
       uimenu(uicmf, 'Label','Legend on/off', 'Callback','legend(gca, ''toggle'',''Location'',''Best'');');

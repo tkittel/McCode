@@ -1,23 +1,22 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
+* McXtrace, x-ray tracing package
 *         Copyright, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
-*         University of Copenhagen, Copenhagen, Denmark
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Mirror_toroid
 *
-* %I
+* %Identification
 *
 * Written by: Erik B Knudsen
 * Date: Jul 2016
 * Version: 1.0
 * Origin: DTU Physics
 *
-* Toroidal shape mirror
+* Toroidal shape mirror (in XZ)
 *
-* %D
+* %Description
 * This is an implementation of a toroidal mirror which may be curved in two dimensions.
 * To avoid solving quartic equations, the intersection is compited as a combination of 
 * two intersections. First, the ray is intersected with a cylinder to catch (almost) the small
@@ -26,17 +25,23 @@
 *
 * In the first incarnation we assume the mirror to be curving outwards (a bump).
 *
-* %P
+* Example: Mirror_toroid(zdepth=0.340,xwidth=0.020,radius=246.9254,radius_o=246.9254,R0=1)
+*
+* %Parameters
 * Input parameters:
+* R0:      [1]  Reflectivity of mirror.
+* xwidth:  [m]  Width of mirror.
+* zdepth:  [m]  Length of mirror.
+* coating: [str] Datafile containing either mirror material constants or reflectivity  numbers.
+* radius:  [m] Curvature radius
+* radius_o:[m] Curvature radius, outwards
 *
-* (none)
-*
-* %E
+* %End
 *******************************************************************************/
 
 DEFINE COMPONENT Mirror_toroid
 DEFINITION PARAMETERS ()
-SETTING PARAMETERS (string reflec="", zdepth=0.1, xwidth=0.01, radius, radius_o,R0=0)
+SETTING PARAMETERS (string coating="", zdepth=0.1, xwidth=0.01, radius, radius_o,R0=0)
 OUTPUT PARAMETERS ()
 /* X-ray parameters: (x,y,z,kx,ky,kz,phi,t,Ex,Ey,Ez,p) */ 
 
@@ -54,8 +59,8 @@ DECLARE
 INITIALIZE
 %{
   int status;
-  if (reflec && strlen(reflec) && strcmp(reflec,"NULL") ) {
-    status=reflec_Init(&re,COATING_UNDEFINED,reflec,NULL);
+  if (coating && strlen(coating) && strcmp(coating,"NULL") ) {
+    status=reflec_Init(&re,COATING_UNDEFINED,coating,NULL);
   }else{
     status=reflec_Init_const(&re,R0);
   }
@@ -121,8 +126,70 @@ TRACE
 
 MCDISPLAY
 %{
-  /* A bit ugly; hard-coded dimensions. */
+  //See parametric equation used for the 3D view here: https://en.wikipedia.org/wiki/Torus#Geometry or here:https://web.maths.unsw.edu.au/~rsw/Torus/index.php
+  //Because the code above doesn't actually reproduce a torus exactly but uses a cylinder and an ellipsoid to construct the toroidal mirror (to avoid solving quartic equations),
+  //there's a slight mismatch between the 3D view (exact torus) and the actual toroidal mirror coded above.
   
+  double x0,y0,z0,x1,y1,z1,theta,phi,phi_total,theta_total,theta_beginning,phi_beginning,theta_end,phi_end;
+  //int N=50; too many points, makes the 3D matlab viewer bug
+  int N=10;     
+  
+  phi_total = RAD2DEG*(zdepth/(radius+radius_o));//degrees
+  theta_total = RAD2DEG*(xwidth/radius);
+  
+  //fix theta=0 and phi=180 degrees respectively
+  theta=0;
+  phi=180;
+  
+  //then start at the beginning of the theta or phi range in order to map the flat surface (xwidth, zdepth) on the torus.
+  theta_beginning=theta-(theta_total/2);
+  phi_beginning=phi-(phi_total/2);
+   
+  theta_end = theta+(theta_total/2);
+  phi_end = phi+(phi_total/2);
+  
+  theta = theta_beginning;
+  phi = phi_beginning;  
+  
+  while (theta<=theta_end){
+      phi=180-(phi_total/2);
+      x0=radius*sin(DEG2RAD*theta);
+      y0=(radius_o+radius*cos(DEG2RAD*theta))*cos(DEG2RAD*phi)+(radius_o+radius);
+      z0=(radius_o+radius*cos(DEG2RAD*theta))*sin(DEG2RAD*phi);
+      while (phi<=phi_end){
+          x1=radius*sin(DEG2RAD*theta);
+          y1=(radius_o+radius*cos(DEG2RAD*theta))*cos(DEG2RAD*phi)+(radius_o+radius);
+          z1=(radius_o+radius*cos(DEG2RAD*theta))*sin(DEG2RAD*phi);      
+          line(x0,y0,z0,x1,y1,z1);   
+          x0=x1;
+          y0=y1; 
+          z0=z1; 
+          phi+=phi_total/N;
+          
+      }
+      theta+=theta_total/N;
+  }  
+   
+  theta = theta_beginning;
+  phi = phi_beginning;  
+  
+  while (phi<=phi_end){
+      theta=-(theta_total/2);
+      x0=radius*sin(DEG2RAD*theta);
+      y0=(radius_o+radius*cos(DEG2RAD*theta))*cos(DEG2RAD*phi)+(radius_o+radius);
+      z0=(radius_o+radius*cos(DEG2RAD*theta))*sin(DEG2RAD*phi);
+      while (theta<=theta_end){
+          x1=radius*sin(DEG2RAD*theta);
+          y1=(radius_o+radius*cos(DEG2RAD*theta))*cos(DEG2RAD*phi)+(radius_o+radius);
+          z1=(radius_o+radius*cos(DEG2RAD*theta))*sin(DEG2RAD*phi);      
+          line(x0,y0,z0,x1,y1,z1);   
+          x0=x1;
+          y0=y1; 
+          z0=z1; 
+          theta+=theta_total/N;
+      }
+      phi+=phi_total/N;
+  }
   line(-xwidth/2.0,0,-zdepth/2.0, xwidth/2.0,0,-zdepth/2.0);
   line(-xwidth/2.0,0, zdepth/2.0, xwidth/2.0,0, zdepth/2.0);
   line(-xwidth/2.0,0,-zdepth/2.0,-xwidth/2.0,0, zdepth/2.0);

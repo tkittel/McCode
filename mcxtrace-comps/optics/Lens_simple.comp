@@ -1,20 +1,20 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
-*         Copyright 1997-2002, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
+* McXtrace, x-ray tracing package
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Lens_simple
 *
-* %I
+* %Identification
 * Written by: Erik Knudsen
 * Date: June 16, 2009
 * Origin: Risoe
 *
 * Simple refractive x-ray lens
 * 
-* %D
+* %Description
 * Models a stack of N refractive lenses, with a radius of curvature, r, at the apex.
 * The model is a thin-lens approximation where photons are refracted in a the XY plane
 * at Z=0. Absorption is generally disregarded may be handled through the use of the optional
@@ -24,21 +24,24 @@
 *
 * Example: Lens_simple(xwidth=1e-5, yheight=1e-5, material_datafile="Be.txt",N=100,r=0.3e-3)
 *
-* %P
+* %Parameters
 * INPUT PARAMETERS
 *
 * xwidth:  [m] Width of lens aperture.
 * yheight: [m] Height of lens aperture.
 * radius:  [m] Radius of lens aperture (overrides xwidth & yheight).
 * f:       [m] Focal length - overrides the material_datafile - and diregards chromatic aberration.
-* material_datafile: [ ] File where the material parameters for the lens may be found. Format is similar to what may be found off the NISP website.
+* material_datafile: [ ] File where the material parameters for the lens may be found. Format is similar to what may be found off the NIST website.
 * N:       [ ] The number of successive lenses in the stack.
-* r:       [ ] The radius of curvature of the lens.
+* r:       [m] The radius of curvature of the lens.
 * Optional parameters:
-* T:       [ ] Transmission efficiency of the lens.
+* T:       [0-1] Transmission efficiency of the lens.
 * verbose: [ ] Extra information for debugging. 
 *
-* %E
+* %Link
+* material datafile obtained from http://physics.nist.gov/cgi-bin/ffast/ffast.pl
+*
+* %End
 *******************************************************************************/
 DEFINE COMPONENT Lens_simple
 DEFINITION PARAMETERS ()
@@ -147,6 +150,8 @@ TRACE
 
   /*set the phase shift*/
   phi+=k*1e10*((x*x+y*y)/2*F); /*k in AA⁻1 but x,y and f are in m. conversion factor.*/
+  
+  p *= T;
 %}
 
 FINALLY

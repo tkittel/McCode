@@ -1,13 +1,13 @@
 /*******************************************************************************
 *
-* McXtrace, xray-tracing package
-*         Copyright 1997-2002, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
+* McXtrace, x-ray tracing package
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: DivE_monitor
 *
-* %I
+* %Identification
 * Written by: Erik B Knudsen
 * Based on neutron component by Kristian Nielsen
 * Date: Jun. 2016
@@ -20,28 +20,24 @@
 * and Energy.
 *
 * Example: DivE_monitor(nE=20, nh=20, filename="Output.div",
-*           xmin=-0.1, xmax=0.1, ymin=-0.1, ymax=0.1,
+*           xwidth=0.1, yheight=0.1,
 *           maxdiv_h=2, Emin=2, Emax=10)
 *
 * %Parameters
 * INPUT PARAMETERS:
 *
-* xmin:     Lower x bound of detector opening (m)
-* xmax:     Upper x bound of detector opening (m)
-* ymin:     Lower y bound of detector opening (m)
-* ymax:     Upper y bound of detector opening (m)
-* xwidth:   Width of detector. Overrides xmin,xmax. (m)
-* yheight:  Height of detector. Overrides ymin,ymax. (m)
-* nE:       Number of bins in energy (1)
-* nh:       Number of bins in divergence (1)
-* nx:       (1)
-* ny:       Vector definition of "forward" direction wrt. divergence, to be used e.g. when the monitor is rotated into the horizontal plane.(1)
-* nz:       (1)
-* maxdiv_h: Maximal horizontal divergence detected (degrees)
-* Emin:     Minimum energy detected (keV)
-* Emax:     Maximum energy detected (keV)
-* filename: Name of file in which to store the detector image (string)
-* restore_xray: If set, the monitor does not influence the photon state (1)
+* xwidth:  [m] Width of detector. 
+* yheight: [m] Height of detector. 
+* nE:      [1] Number of bins in energy
+* nh:      [1] Number of bins in divergence
+* nx:      [1]
+* ny:      [1] Vector definition of "forward" direction wrt. divergence, to be used e.g. when the monitor is rotated into the horizontal plane.
+* nz:      [1] 
+* maxdiv_h: [deg] Maximal horizontal divergence detected
+* Emin:    [keV] Minimum energy detected
+* Emax:    [keV] Maximum energy detected
+* filename: [str] Name of file in which to store the detector image
+* restore_xray: [1] If set, the monitor does not influence the photon state
 * nowritefile: [1]  If set, monitor will skip writing to disk.
 *
 * %End
@@ -49,7 +45,8 @@
 
 DEFINE COMPONENT DivE_monitor
 DEFINITION PARAMETERS ()
-SETTING PARAMETERS (int nE=20, int nh=20, string filename=0, xmin=-0.05, xmax=0.05, ymin=-0.05, ymax=0.05, xwidth=0, yheight=0, maxdiv_h=2, Emin, Emax, restore_xray=0, nx=0, ny=0, nz=1, int nowritefile=0)
+SETTING PARAMETERS (int nE=20, int nh=20, string filename=0, xwidth=0.1, yheight=0.1, 
+  maxdiv_h=2, Emin, Emax, restore_xray=0, nx=0, ny=0, nz=1, int nowritefile=0)
 OUTPUT PARAMETERS ()
 /* X-ray  parameters: (x,y,z,kx,ky,kz,phi,t,Ex,Ey,Ez,p) */ 
 
@@ -58,14 +55,18 @@ DECLARE
   DArray2d DivE_N;
   DArray2d DivE_p;
   DArray2d DivE_p2;
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
 %}
 
 INITIALIZE
 %{
     int i,j;
 
-    if (xwidth  > 0) { xmax = xwidth/2;  xmin = -xmax; }
-    if (yheight > 0) { ymax = yheight/2; ymin = -ymax; }
+    xmax = xwidth/2;  xmin = -xmax;
+    ymax = yheight/2; ymin = -ymax;
 
     if ((xmin >= xmax) || (ymin >= ymax)) {
       printf("ERROR: (%s): Null detection area! Exiting.\n",NAME_CURRENT_COMP);
@@ -98,7 +99,7 @@ TRACE
 
       if (div < maxdiv_h && div > -maxdiv_h)
       {
-        i = floor((lambda - Lmin)*nL/(Lmax - Lmin));
+        i = floor((e -Emin)*nE/(Emax - Emin));
         j = floor((div + maxdiv_h)*nh/(2.0*maxdiv_h));
         DivE_N[i][j]++;
         DivE_p[i][j] += p;
@@ -118,7 +119,7 @@ SAVE
         "Energy-divergence monitor",
         "Energy [keV]",
         "divergence [deg]",
-        Lmin, Lmax, -maxdiv_h, maxdiv_h,
+        Emin, Emax, -maxdiv_h, maxdiv_h,
         nE, nh,
         &DivE_N[0][0],&DivE_p[0][0],&DivE_p2[0][0],
         filename);

@@ -21,349 +21,6 @@ from os.path import join, basename
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from mccodelib import utils, mccode_config
 
-def repair_instr(localdir):
-    '''
-    Dev function used to alter instr file headers.
-    '''
-    local_instr_files, local_comp_files = utils.get_instr_comp_files(localdir)
-    
-    files = []
-    rows = []
-    for filename in local_instr_files:
-        try:
-            print("parsing... %s" % filename)
-            info = InstrParser(filename).parse()
-            files.append(filename)
-            rows.append(info)
-        except:
-            print("failed parsing instr file: %s" % filename)
-            quit()
-    
-    cnt = 0
-    for filename in local_instr_files:
-        f = open(filename, 'r')
-        # read the first two instr file sections
-        header = utils.read_header(f)
-        define = utils.read_define_instr(f)
-        
-        # doc lines
-        print('*****')
-        print(filename)
-        print()
-        
-        seen_P = False
-        par_docs = []
-        idxs = []
-        idxs_remove = []
-        lines = header.splitlines()
-        for i in range(len(lines)):
-            l = lines[i]
-            
-            # remove unwanted lines
-            m = re.match('\* Release:', l)
-            if m:
-                idxs_remove.append(i)
-                continue
-            m = re.match('\* Version:', l)
-            if m:
-                idxs_remove.append(i)
-                continue
-            m = re.match('\* INPUT PARAMETERS:', l)
-            if m:
-                idxs_remove.append(i)
-                continue
-            
-            # fast-forward to %P / %Parameters tag
-            if not seen_P and re.match('\* \%Parameters', l):
-                seen_P = True
-            elif not seen_P:
-                continue
-            # exit if we reach %L / %Link tag 
-            if re.match('\* \%L', l):
-                break
-            
-            l = l.lstrip('*').strip()
-            m = re.match('(\w+):[ \t]*\[([ \w\/\(\)\\\~\-.,\":\%\^\|\{\};\*]+)\][ \t]*(.*)', l)
-            if m:
-                healthy_par_doc = (m.group(1), m.group(2), m.group(3).strip())
-                par_docs.append(healthy_par_doc)
-                idxs.append(i)
-                continue
-            elif re.match('(\w+):', l):
-                # empty docstrings
-                m3 = re.match('(\w+):[ \t]*$', l)
-                if m3:
-                    empty_par_doc = (m3.group(1), '', '')
-                    par_docs.append(empty_par_doc)
-                    idxs.append(i)
-                    continue
-                # no-unit docstrings
-                m4 = re.match('(\w+):[ \t]*([ \t\w,.\-\(\)\=\^\/:\"\'\%\<\>\|\{\};\*]+)$', l)
-                if m4:
-                    limp_par_doc = (m4.group(1), '', m4.group(2).strip())
-                    par_docs.append(limp_par_doc)
-                    idxs.append(i)
-                    continue
-                # "inversed" docstrings
-                m2 = re.match('(\w+):[ \t]*(.*)[ \t]*\[([ \w\/\(\)\\\~\-.,\":\%\|\{\}]+)\]', l)
-                if m2:
-                    par_doc = (m2.group(1), m2.group(3).strip(), m2.group(2))
-                    par_docs.append(par_doc)
-                    idxs.append(i)
-                    continue
-        
-        # edit par doc lines, remove superfluous
-        if True:
-            if len(par_docs) == 0:
-                continue
-            l01 = max([len(p[0]) + len(p[1]) for p in par_docs])
-            
-            name, real_pars = utils.parse_define_instr(define)
-            real_parnames = [par[1] for par in real_pars]
-            
-            # rewrite par doc lines, remove "bonus" doc lines without a parameter to document
-            for i in range(len(par_docs)):
-                p = par_docs[i]
-                idx = idxs[i]
-                
-                # reorganize the docstring line
-                format_str = '* %s: %-' +str(l01-len(p[0])+3)+ 's %s'
-                l = format_str % (p[0], '['+p[1]+']', p[2])
-                print(l)
-                
-                # replace l in lines:
-                lines[idx] = l
-                
-                # flag superfluous doc lines for removal
-                if p[0] not in real_parnames:
-                    # (!!!!)
-                    # TODO: take care of the ordering of idxs_remove. Today, we know that all previuosly 
-                    # removed lines are above, but this may change
-                    # (!!!!)
-                    idxs_remove.append(idx)
-            
-            # add a stub par doc line for each par that isn't represented (WARNING: do not use while removing lines!
-            if False:
-                print()
-                extra_pardoc_lines = []
-                par_doc_names = [q[0] for q in par_docs]
-                for i in range(len(real_pars)):
-                    par_name = real_pars[i][1]
-                    if par_name not in par_doc_names:
-                        l = '* %s:' % par_name
-                        print(l)
-                        extra_pardoc_lines.append(l)
-                # insert those extra lines ...
-                good_idx = idxs[-1]
-                for i in range(len(extra_pardoc_lines)):
-                    l = extra_pardoc_lines[i]
-                    lines.insert(good_idx + i + 1, l)
-        
-        # append/read-append remaining lines
-        for l in define.splitlines():
-            lines.append(l)
-        for l in f:
-            lines.append(l.rstrip('\n'))
-        
-        # remove unwanted lines:
-        for idx in reversed(idxs_remove):
-            del lines[idx]
-        
-        for l in lines:
-            print(l)
-        
-        continue
-        
-        f.close()
-        f = open(filename, 'w')
-        f.write('\n'.join(lines) + '\n')
-        f.close()
-        
-        cnt += 1
-        print(cnt)
-    quit()
-
-
-def repair_comp(localdir):
-    '''
-    Dev function used to alter comp file headers.
-    '''
-    local_instr_files, local_comp_files = utils.get_instr_comp_files(localdir)
-    
-    files = []
-    rows = []
-    
-    for filename in local_comp_files:
-        try:
-            print("parsing... %s" % filename)
-            info = CompParser(filename).parse()
-            files.append(filename)
-            rows.append(info)
-        except:
-            print("failed parsing instr file: %s" % filename)
-            quit()
-    
-    cnt = 0
-    for filename in local_comp_files:
-        f = open(filename, 'r')
-        # read the first two instr file sections
-        header = utils.read_header(f)
-        define = utils.read_define_comp(f)
-        
-        # doc lines
-        print('*****')
-        print(filename)
-        print()
-        
-        if filename == '/home/jaga/source/McCode/mcstas-comps/samples/Single_crystal.comp':
-            print()
-        
-        seen_P = False
-        par_docs = []
-        idxs = []
-        idxs_remove = []
-        lines = header.splitlines()
-        for i in range(len(lines)):
-            l = lines[i]
-            
-            # remove unwanted lines
-            m = re.match('\* Release:', l)
-            if m:
-                idxs_remove.append(i)
-                continue
-            m = re.match('\* Version:', l)
-            if m:
-                idxs_remove.append(i)
-                continue
-            
-            # fast-forward to %P / %Parameters tag
-            if not seen_P and re.match('\* \%P', l):
-                seen_P = True
-            elif not seen_P:
-                continue
-            
-            # exit if we reach %L / %Link tag 
-            if re.match('\* \%L', l):
-                break
-            
-            l = l.lstrip('*').strip()
-            m = re.match('(\w+):[ \t]*\[([ \w\/\(\)\\\~\-.,\":\%\^\|\{\};\*]+)\][ \t]*(.*)', l)
-            if m:
-                healthy_par_doc = (m.group(1), m.group(2), m.group(3).strip())
-                par_docs.append(healthy_par_doc)
-                idxs.append(i)
-                continue
-            elif re.match('\w+:', l):
-                # "inversed" docstrings
-                m2 = re.match('(\w+):[ \t]*(.*)[ \t]*\[([ \w\/\(\)\\\~\-.,\":\%\|\{\}]+)\]', l)
-                if m2:
-                    par_doc = (m2.group(1), m2.group(3).strip(), m2.group(2))
-                    par_docs.append(par_doc)
-                    idxs.append(i)
-                    continue
-                # docstrings with soft brackets
-                m5 = re.match('(\w+):[ \t]*\(([\w\/\\\~\-.,\":\%\^\|\{\};\*]+)\)[ \t]*(.*)', l)
-                if m5:
-                    par_doc = (m5.group(1), m5.group(2).strip(), m5.group(3))
-                    par_docs.append(par_doc)
-                    idxs.append(i)
-                    continue
-                # "inversed" docstrings with soft brackets
-                m2 = re.match('(\w+):[ \t]*(.*)[ \t]*\(([\w\/\(\)\\\~\-.,\":\%\|\{\}]+)\)[ \t]*$', l)
-                if m2:
-                    par_doc = (m2.group(1), m2.group(3).strip(), m2.group(2))
-                    par_docs.append(par_doc)
-                    idxs.append(i)
-                    continue
-                # empty docstrings
-                m3 = re.match('(\w+):[ \t]*$', l)
-                if m3:
-                    empty_par_doc = (m3.group(1), '', '')
-                    par_docs.append(empty_par_doc)
-                    idxs.append(i)
-                    continue
-                # no-unit docstrings
-                m4 = re.match('(\w+):[ \t]*([ \t\w,.\-\(\)\=\^\/:\"\'\%\<\>\|\{\};\*]+)$', l)
-                if m4:
-                    limp_par_doc = (m4.group(1), '', m4.group(2).strip())
-                    par_docs.append(limp_par_doc)
-                    idxs.append(i)
-                    continue
-        
-        # edit par doc lines, remove superfluous
-        if True:
-            if len(par_docs) == 0:
-                continue
-            l01 = max([len(p[0]) + len(p[1]) for p in par_docs])
-            
-            name, defpar, setpar, outpar = utils.parse_define_comp(define)
-            real_pars = defpar + setpar + outpar
-            real_parnames = [par[1] for par in real_pars]
-            
-            # rewrite par doc lines, remove "bonus" doc lines without a parameter to document
-            for i in range(len(par_docs)):
-                p = par_docs[i]
-                idx = idxs[i]
-                
-                # reorganize the docstring line
-                format_str = '* %s: %-' +str(l01-len(p[0])+3)+ 's %s'
-                l = format_str % (p[0], '['+p[1]+']', p[2])
-                print(l)
-                
-                # replace l in lines:
-                lines[idx] = l
-                
-                # flag superfluous doc lines for removal
-                if False:
-                    if p[0] not in real_parnames:
-                        # (!!!!)
-                        # TODO: take care of the ordering of idxs_remove. Today, we know that all previuosly 
-                        # removed lines are above, but this may change
-                        # (!!!!)
-                        idxs_remove.append(idx)
-            
-            # add a stub par doc line for each par that isn't represented (WARNING: do not use while removing lines!
-            if False:
-                print()
-                extra_pardoc_lines = []
-                par_doc_names = [q[0] for q in par_docs]
-                for i in range(len(real_pars)):
-                    par_name = real_pars[i][1]
-                    if par_name not in par_doc_names:
-                        l = '* %s:' % par_name
-                        print(l)
-                        extra_pardoc_lines.append(l)
-                # insert those extra lines ...
-                good_idx = idxs[-1]
-                for i in range(len(extra_pardoc_lines)):
-                    l = extra_pardoc_lines[i]
-                    lines.insert(good_idx + i + 1, l)
-        
-        # append/read-append remaining lines
-        for l in define.splitlines():
-            lines.append(l)
-        for l in f:
-            lines.append(l.rstrip('\n'))
-        
-        # remove unwanted lines:
-        for idx in reversed(idxs_remove):
-            del lines[idx]
-        
-        for l in lines:
-            print(l)
-        
-        continue
-        
-        f.close()
-        f = open(filename, 'w')
-        f.write('\n'.join(lines) + '\n')
-        f.close()
-        
-        cnt += 1
-        print(cnt)
-    quit()
-
-
 def get_html_filepath(filepath):
     ''' transform from .anything to .html '''
     return os.path.splitext(filepath)[0] + '.html'
@@ -417,6 +74,11 @@ class OverviewDocWriter:
         union_tab = ''
         for c in union_lst:
             union_tab = union_tab + t % (get_html_filepath(c.filepath), c.name, c.origin, c.author, c.filepath, 'comp', c.short_descr) + '\n'
+        # SASmodels
+        sasmodels_lst = [c for c in self.comp_info_lst if c.category=='sasmodels']
+        sasmodels_tab = ''
+        for c in sasmodels_lst:
+            sasmodels_tab = sasmodels_tab + t % (get_html_filepath(c.filepath), c.name, c.origin, c.author, c.filepath, 'comp', c.short_descr) + '\n'
         # Astrox
         astrox_lst = [c for c in self.comp_info_lst if c.category=='astrox']
         astrox_tab = ''
@@ -477,6 +139,7 @@ class OverviewDocWriter:
         text = text.replace('%TAB_LINES_SAMPLES%', samples_tab)
         text = text.replace('%TAB_LINES_MONITORS%', monitors_tab)
         text = text.replace('%TAB_LINES_UNION%', union_tab)
+        text = text.replace('%TAB_LINES_SASMODELS%', sasmodels_tab)
         text = text.replace('%TAB_LINES_MISC%', misc_tab)
         text = text.replace('%TAB_LINES_CONTRIB%', contrib_tab)
         text = text.replace('%TAB_LINES_OBSOLETE%', obsolete_tab)
@@ -524,6 +187,7 @@ class OverviewDocWriter:
             '%TAB_LINES_MONITORS%',
             '%TAB_LINES_CONTRIB%',
             '%TAB_LINES_UNION%',
+            '%TAB_LINES_SASMODELS%',
             '%TABLE_ASTROX%',
             '%TAB_LINES_MISC%',
             '%TAB_LINES_OBSOLETE%',
@@ -547,6 +211,7 @@ class OverviewDocWriter:
  | <A href="#samples">samples</A>
  | <A href="#monitors">monitors</A>
  | <A href="#union">union</A>
+ | <A href="#sasmodels">sasmodels</A>
 %HDR_ASTROX%
  | <A href="#misc">misc</A>
  | <A href="#contrib">contrib</A>
@@ -615,6 +280,16 @@ class OverviewDocWriter:
 %TAB_HEAD%
 
 %TAB_LINES_UNION%
+
+</TABLE>
+
+<P><A NAME="sasmodels"></A>
+<B><FONT COLOR="#FF0000">SASmodels components</FONT></B>
+<TABLE BORDER COLS=5 WIDTH="100%" NOSAVE>
+
+%TAB_HEAD%
+
+%TAB_LINES_SASMODELS%
 
 </TABLE>
 
@@ -1257,7 +932,7 @@ def main(args):
 
     elif args.web == True:
         ''' open website and exit '''
-        subprocess.Popen('%s %s' % (mccode_config.configuration['BROWSER'], 'http://www.'+mccode_config.configuration['MCCODE']+'.org'), shell=True)
+        subprocess.Popen('%s %s' % (mccode_config.configuration['BROWSER'], 'https://www.'+mccode_config.configuration['MCCODE']+'.org'), shell=True)
         quit()
 
     elif args.install == True:
@@ -1367,7 +1042,7 @@ if __name__ == '__main__':
     parser.add_argument('--manual','-m', action='store_true', help='open the system manual')
     parser.add_argument('--comps','-c', action='store_true', help='open the component manual')
     parser.add_argument('--web','-w', action='store_true', help='open the '+mccode_config.configuration['MCCODE']+' website')
-    parser.add_argument('--verbose','-b', action='store_true', help='prints a parsing log during execution')
+    parser.add_argument('--verbose','-v', action='store_true', help='prints a parsing log during execution')
     
     
     args = parser.parse_args()

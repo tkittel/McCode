@@ -1,51 +1,48 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
-*         Copyright (C), All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
+* McXtrace, x-ray tracing package
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: PSD_monitor
 *
-* %I
+* %Identification
 * Written by: Erik B Knudsen
 * Date: June 22, 2009
 * Origin: Risoe
 *
 * Position-sensitive monitor.
 *
-* %D
+* %Description
 * Based on neutron component written by Kim Lefmann
 * An (nx times ny) pixel PSD monitor. This component may also be used as a beam
 * detector. If instead of xwidth, yheight a radius is given, the component has a circular footprint
 * and integrates circularly (caking).
 *
-* Example: PSD_monitor(xmin=-0.1, xmax=0.1, ymin=-0.1, ymax=0.1,
-            nx=90, ny=90, filename="Output.psd")
+* Example: PSD_monitor(xwidth=0.1, yheight=0.1,
+*          nx=90, ny=90, filename="Output.psd")
 *
-* %P
+* %Parameters
 * INPUT PARAMETERS:
 *
-* xmin: [m]             Lower x bound of detector opening
-* xmax: [m]             Upper x bound of detector opening
-* ymin: [m]             Lower y bound of detector opening
-* ymax: [m]             Upper y bound of detector opening
-* xwidth: [m]           Width of detector. Overrides xmin,xmax.
-* yheight: [m]          Height of detector. Overrides ymin,ymax.
+* xwidth: [m]           Width of detector.
+* yheight: [m]          Height of detector.
 * radius:  [m]          Radius of circular detetor.
 * nx: [1]               Number of pixel columns.
 * ny: [1]               Number of pixel rows.
 * nr: [1]               Number of radial pixels.
-* filename: [1]         Name of file in which to store the detector image.
+* filename: [str]       Name of file in which to store the detector image.
 * restore_xray: [1]     If set, the monitor does not influence the xray state.
 * nowritefile: [1]      If set, monitor will skip writing to disk
 *
-* %E
+* %End
 *******************************************************************************/
 
 DEFINE COMPONENT PSD_monitor
 DEFINITION PARAMETERS ()
-SETTING PARAMETERS (string filename=0, xmin=-0.05, xmax=0.05, ymin=-0.05, ymax=0.05, xwidth=0, yheight=0, radius=0, restore_xray=1, int nowritefile=0, int nx=90, int ny=90, int nr=0)
+SETTING PARAMETERS (string filename=0, xwidth=0.05, yheight=0.05, radius=0, restore_xray=1, 
+  int nowritefile=0, int nx=90, int ny=90, int nr=0)
 OUTPUT PARAMETERS ()
 /* X-ray parameters: (x,y,z,kx,ky,kz,phi,t,Ex,Ey,Ez,p) */ 
 
@@ -54,6 +51,10 @@ DECLARE
   DArray2d PSD_N;
   DArray2d PSD_p;
   DArray2d PSD_p2;
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
 %}
 
 INITIALIZE
@@ -61,8 +62,8 @@ INITIALIZE
     int i,j;
     double *p1,*p2,*p3;
 
-    if (xwidth  > 0) { xmax = xwidth/2;  xmin = -xmax; }
-    if (yheight > 0) { ymax = yheight/2; ymin = -ymax; }
+    xmax = xwidth/2;  xmin = -xmax;
+    ymax = yheight/2; ymin = -ymax;
 
     if ( ((xmin >= xmax) || (ymin >= ymax)) && !radius ) {
       fprintf(stderr,"ERROR (%s): Null detection area! Aborting.\n",NAME_CURRENT_COMP);

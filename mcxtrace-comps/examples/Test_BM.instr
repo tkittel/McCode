@@ -22,10 +22,7 @@
 * %Parameters
 * e0: [keV] Central energy of the interval to be looked at
 * de: [keV] Half-width of energy interval
-* 
-*
-* %Link
-* A reference/HTML link for more information
+* SOURCE: [0/1] select a BM (0) or a Wiggler (1) source.
 *
 * %End
 *******************************************************************************/
@@ -62,12 +59,12 @@ COMPONENT Origin = Progress_bar()
 
 COMPONENT bm0 = Bending_magnet(
     E0 = e0, dE = de, phase = 0, randomphase = 1, Ee = 2.4,
-    Ie = 0.4, tbunch = 0, B = 1.6)
+    Ie = 0.4, B = 1.6)
 WHEN (SOURCE==0) AT (0, 0, 0) RELATIVE Origin
 
 COMPONENT w1 = Wiggler(
     E0 = e0, dE = de, phase = 0, randomphase = 1, Ee = 2.4,
-    Ie = 0.4, tbunch = 0, B = 1.6, K=10, Nper=41)
+    Ie = 0.4, B = 1.6, K=10, Nper=41)
 WHEN (SOURCE==1) AT(0,0,0) RELATIVE Origin
 
 COMPONENT psd0 = PSD_monitor(

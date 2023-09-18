@@ -21,12 +21,14 @@
     "OACCFLAGS": "@OACCFLAGS@",
     "CC": "@TOOLS_CC@",
     "OACC": "@OACC@",
-    "MPICC": "@MPICC@",
-    "MPIRUN": "@MPIRUN@",
-    "MPINODES": "4"
+    "MPICC": "mpicc",
+    "MPIRUN": "mpirun",
+    "MPINODES": "auto"
   },
   "platform": {
     "EXESUFFIX": "@MCCODE_EXECUTABLE_SUFFIX@"
+  },
+  "directories": {
   }
 }
 

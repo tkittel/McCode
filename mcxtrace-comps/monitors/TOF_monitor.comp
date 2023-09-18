@@ -1,13 +1,13 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
-*         Copyright 1997-2014, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
+* McXtrace, x-ray tracing package
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: TOF_monitor
 *
-* %I
+* %Identification
 * Written by: Erik B Knudsen
 * Date: Aug. 2014
 * Origin: British Airways
@@ -15,24 +15,21 @@
 *
 * Rectangular Time-of-flight monitor.
 *
-* %D
-* Rectangular Time-of-flight monitor.
+* %Description
+* Rectangular Time-of-flight monitor. You may either give the time-step or the 
+* time range.
 *
-* %P
+* %Parameters
 * INPUT PARAMETERS:
 *
-* xmin:     Lower x bound of detector opening (m)
-* xmax:     Upper x bound of detector opening (m)
-* ymin:     Lower y bound of detector opening (m)
-* ymax:     Upper y bound of detector opening (m)
-* xwidth:   Width of detector. Overrides xmin,xmax. (m)
-* yheight:  Height of detector. Overrides ymin,ymax. (m)
-* nt:       Number of time bins (1)
-* dt:       Length of each time bin (mu-s)
-* tmin:     Lower time limit (mu-s)
-* tmax:     Upper time limit (mu-s)
-* filename: Name of file in which to store the detector image (text)
-* restore_xray: If set, the monitor does not influence the xray state (1)
+* xwidth:   [m] Width of detector.
+* yheight:  [m] Height of detector.
+* nt:       [1] Number of time bins
+* dt:       [mu-s] Length of each time bin
+* tmin:     [mu-s] Lower time limit
+* tmax:     [mu-s] Upper time limit. When left as 0, use dt to compute tmax.
+* filename: [str] Name of file in which to store the detector image
+* restore_xray: [1] If set, the monitor does not influence the xray state 
 *
 * OUTPUT PARAMETERS:
 *
@@ -40,13 +37,13 @@
 * TOF_p:    Array of xray weight counts
 * TOF_p2:   Array of second moments
 *
-* %E
+* %End
 *******************************************************************************/
 
 DEFINE COMPONENT TOF_monitor
 DEFINITION PARAMETERS (nt=20)
-SETTING PARAMETERS (string filename=0, xmin=-0.05, xmax=0.05, ymin=-0.05, ymax=0.05, 
-    xwidth=0, yheight=0, tmin=0, tmax=0, dt=1.0, restore_xray=0)
+SETTING PARAMETERS (string filename=0, 
+    xwidth=0.1, yheight=0.1, tmin=0, tmax=0, dt=1.0, restore_xray=0)
 OUTPUT PARAMETERS (TOF_N, TOF_p, TOF_p2, t_min, t_max, delta_t)
 
 DECLARE
@@ -57,17 +54,21 @@ DECLARE
     double t_min;
     double t_max;
     double delta_t;
+    double xmin;
+    double xmax;
+    double ymin;
+    double ymax;
   %}
 INITIALIZE
   %{
     int i;
 
-    if (xwidth  > 0) { xmax = xwidth/2;  xmin = -xmax; }
-    if (yheight > 0) { ymax = yheight/2; ymin = -ymax; }
+    xmax = xwidth/2;  xmin = -xmax;
+    ymax = yheight/2; ymin = -ymax;
 
     if ((xmin >= xmax) || (ymin >= ymax)) {
             printf("TOF_monitor: %s: Null detection area !\n"
-                   "ERROR        (xwidth,yheight,xmin,xmax,ymin,ymax). Exiting",
+                   "ERROR        (xwidth,yheight). Exiting",
            NAME_CURRENT_COMP);
       exit(0);
     }

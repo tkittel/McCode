@@ -11,6 +11,7 @@ import webbrowser
 import subprocess
 import time
 import re
+import pathlib
 from PyQt5 import QtCore, QtWidgets
 import PyQt5
 try:
@@ -32,7 +33,8 @@ class McMessageEmitter(QtCore.QObject):
     statusUpdate = QtCore.pyqtSignal(str)
     __statusLog = []
     
-    logMessageUpdate = QtCore.pyqtSignal(str, bool, bool)
+    # logMessageUpdate(msg, flag_err_red, flag_gui_blue, flag_clear)
+    logMessageUpdate = QtCore.pyqtSignal(str, bool, bool, bool)
     __msgLog = []
     
     def status(self, status):
@@ -45,17 +47,20 @@ class McMessageEmitter(QtCore.QObject):
         self.__statusLog.append(status)
         
     
-    def message(self, msg, err_msg=False, gui=False):
+    def message(self, msg, err_msg=False, gui=False, clear=False):
         ''' message log messages (simulation progress etc.)
         '''
         if msg == None:
             return
         
-        self.logMessageUpdate.emit(msg, err_msg, gui)
+        self.logMessageUpdate.emit(msg, err_msg, gui, clear)
         self.__msgLog.append(msg)
         # NOTE: calling processEvents too often can lead to some sort of stack overflow, but side effects are to be investigated
         #QtWidgets.QApplication.processEvents()
 
+    def clear(self, msg):
+        '''clear Log/History'''
+        self.logMessageUpdate.emit(msg, False, True, True)
 
 ''' Asynchronous process execution QThread
 '''
@@ -301,8 +306,8 @@ class McGuiState(QtCore.QObject):
     
     def run(self, fixed_params, params, inspect=None):
         ''' fixed_params[]:
-                0 - simulation = 0, trace = 1
-                1 - neutron count (int)
+                0 - simulation = 0, trace = 1, optimize=2
+                1 - neutron/photon count (int)
                 2 - steps count (int)
                 3 - gravity (bool)
                 4 - clustering 0/1/2 (single/MPI/MPIrecompile) (int)
@@ -321,7 +326,7 @@ class McGuiState(QtCore.QObject):
         mpicount = fixed_params[5]
         Format = fixed_params[9]
         if mpicount == '':
-            mpicount = '2'
+            mpicount = 'auto'
         if clustering == 1:
             mcrunparms = ' --mpi=' + mpicount + ' '
         elif clustering == 2:
@@ -337,7 +342,7 @@ class McGuiState(QtCore.QObject):
 
         # sim/trace and output directory
         simtrace = fixed_params[0]
-        if simtrace == 0:
+        if simtrace == 0 or simtrace == 2: # simulate/optimize (mcrun)
             output_dir = str(fixed_params[7])
             if output_dir == '':
                 DATE_FORMAT_PATH = "%Y%m%d_%H%M%S"
@@ -346,14 +351,20 @@ class McGuiState(QtCore.QObject):
                                datetime.strftime(datetime.now(), DATE_FORMAT_PATH))
                 
             runstr = mccode_config.configuration["MCRUN"] + mcrunparms + os.path.basename(self.__instrFile) + ' -d ' + output_dir
+            if simtrace == 2:
+                runstr = runstr + ' --optimize '
+                if inspect:
+                    runstr = runstr + ' --optimize-monitor=' + inspect
             self.__dataDir = output_dir
-        else:
+        elif simtrace == 1: # trace (mcdisplay)
             if inspect:
                 runstr = mccode_config.configuration["MCDISPLAY"] + ' ' + os.path.basename(self.__instrFile) + ' --no-output-files' + ' --inspect=' + inspect
             else:
                 runstr = mccode_config.configuration["MCDISPLAY"] + ' ' + os.path.basename(self.__instrFile) + ' --no-output-files'
+        else:
+            raise Exception('mcgui.run: invalid execution mode (simulate/trace/optimize).')
         
-        # neutron count
+        # neutron/photon count
         ncount = fixed_params[1]
         if int(float(ncount)) > 0:
             runstr = runstr + ' -n ' + str(ncount)
@@ -453,6 +464,7 @@ class McGuiAppController():
                                    universal_newlines=True)
 
         (stdoutdata, stderrdata) = process.communicate()
+        self.emitter.message(str(datetime.now()), gui=True)
         self.emitter.message(stdoutdata.rstrip('\n'))
         self.emitter.message(stderrdata.rstrip('\n'))
         # Print MCCODE revision data if these exist
@@ -510,12 +522,12 @@ class McGuiAppController():
         # args - [category, comp_names[], comp_parsers[]]
         args = []
         if mccode_config.configuration["MCCODE"]=="mcstas":
-            categories = {0 : 'Source', 1 : 'Optics', 2 : 'Sample', 3 : 'Monitor', 4 : 'Misc', 5 : 'Contrib', 6: 'Union', 7 : 'Obsolete'}
-            dirnames = {0 : 'sources', 1 : 'optics', 2 : 'samples', 3 : 'monitors', 4 : 'misc', 5 : 'contrib', 6: 'union', 7 : 'obsolete'}
+            categories = {0 : 'Source', 1 : 'Optics', 2 : 'Sample', 3 : 'Monitor', 4 : 'Misc', 5 : 'Contrib', 6: 'Union', 7 : 'SASmodels', 8 : 'Obsolete'}
+            dirnames = {0 : 'sources', 1 : 'optics', 2 : 'samples', 3 : 'monitors', 4 : 'misc', 5 : 'contrib', 6: 'union', 7 : 'sasmodels', 8 : 'obsolete'}
             numcat=7
         if mccode_config.configuration["MCCODE"]=="mcxtrace":
-            categories = {0 : 'Source', 1 : 'Optics', 2 : 'Sample', 3 : 'Monitor', 4 : 'Misc', 5 : 'Contrib', 6: 'Union', 7: 'AstroX', 8 : 'Obsolete'}
-            dirnames = {0 : 'sources', 1 : 'optics', 2 : 'samples', 3 : 'monitors', 4 : 'misc', 5 : 'contrib', 6: 'union', 7: 'astrox', 8 : 'obsolete'}
+            categories = {0 : 'Source', 1 : 'Optics', 2 : 'Sample', 3 : 'Monitor', 4 : 'Misc', 5 : 'Contrib', 6: 'Union', 7 : 'SASmodels', 8 : 'AstroX', 9 : 'Obsolete'}
+            dirnames = {0 : 'sources', 1 : 'optics', 2 : 'samples', 3 : 'monitors', 4 : 'misc', 5 : 'contrib', 6: 'union', 7 : 'sasmodels', 8: 'astrox', 9 : 'obsolete'}
             numcat=8
         i = 0
         while i < numcat+1:
@@ -652,6 +664,9 @@ class McGuiAppController():
     def handleExit(self):
         if self.view.closeCodeEditorWindow():
             sys.exit()
+            
+    def clearConsole(self):
+        self.emitter.clear(str(datetime.now()))
     
     def handlePlotResults(self):
         self.emitter.status('')
@@ -855,7 +870,8 @@ class McGuiAppController():
     def handleEnvironment(self):
         terminal = mccode_config.configuration["TERMINAL"]
         if not sys.platform == 'win32':
-            scriptfile = mccode_config.configuration["MCCODE_LIB_DIR"] + '/environment'
+            scriptfile = str(mccode_config.configuration["MCCODE"] + '-environment')
+            scriptfile = str(pathlib.Path(__file__).parent.parent.parent.parent.resolve() / scriptfile)
         else:
             scriptfile = 'start ' + mccode_config.configuration["MCCODE_LIB_DIR"] + '\\..\\bin\\mccodego.bat'
 
@@ -867,22 +883,7 @@ class McGuiAppController():
                                            'Do you want to make the current ' +  mccode_config.configuration["MCCODE"] + ' the system default?'),
  
         if reply == QtWidgets.QMessageBox.Yes:
-             subprocess.Popen('postinst set_mccode_default', shell=True)
-             
-
-    def handleDefaultMcguiPy(self):
-        reply = QtWidgets.QMessageBox.question(self.view.mw,
-                                           'Make Python gui App default?',
-                                           'Do you want to use Python ' +  mccode_config.configuration["MCCODE"] + ' gui in the macOS App?')
-        if reply == QtWidgets.QMessageBox.Yes:
-            subprocess.Popen('postinst osx_app_default py', shell=True)
-
-    def handleDefaultMcguiPl(self):
-        reply = QtWidgets.QMessageBox.question(self.view.mw,
-                                           'Make Python gui App default?',
-                                           'Do you want to use Perl ' +  mccode_config.configuration["MCCODE"] + ' gui in the macOS App?')
-        if reply == QtWidgets.QMessageBox.Yes:
-            subprocess.Popen('postinst osx_app_default pl', shell=True)
+             subprocess.Popen(mccode_config.configuration["MCCODE"] +'-postinst set_mccode_default', shell=True)
 
         
     ''' Connect UI and state callbacks 
@@ -893,6 +894,7 @@ class McGuiAppController():
 
         mwui = self.view.mw.ui
         mwui.actionQuit.triggered.connect(self.handleExit)
+        mwui.actionClear_Console.triggered.connect(self.clearConsole)
         mwui.actionOpen_instrument.triggered.connect(self.handleOpenInstrument)
         mwui.actionClose_Instrument.triggered.connect(self.handleCloseInstrument)
         mwui.actionEdit_Instrument.triggered.connect(self.handleEditInstrument)
@@ -905,9 +907,7 @@ class McGuiAppController():
         # 1) add a copy of the configuration menu to File
         # 2) add menu points for changing what the bundle opens
         if sys.platform == 'darwin':
-            self.view.mw.add_conf_menu('Configuration').triggered.connect(self.handleConfiguration)
-            self.view.mw.add_conf_menu('Use Python App').triggered.connect(self.handleDefaultMcguiPy)
-            self.view.mw.add_conf_menu('Use Perl App').triggered.connect(self.handleDefaultMcguiPl)            
+            self.view.mw.add_conf_menu('Configuration').triggered.connect(self.handleConfiguration)       
 
         # If not on Windows add menu point to make current mccode the system default
         if not sys.platform == 'win32':

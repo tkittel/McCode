@@ -31,7 +31,6 @@ WORK=`pwd`
 # 64-bit
 ./mkdist mcstas $1 "" "" rpm64-fedora "" -- rpm
 ./mkdist mcstas-comps $1 "" "" rpm64-fedora "" -- rpm
-./mkdist mcstas-tools-perl-cmdline $1 tools/Legacy-Perl-cmdline/ "" rpm64-fedora "" -- rpm
 ./mkdist mcstas-tools-matlab-mcplot $1 tools/matlab/mcplot/ "" rpm64-fedora "" -- rpm
 ./mkdist mcstas-tools-matlab-mcdisplay $1 tools/matlab/mcdisplay/ "" rpm64-fedora "" -- rpm
 ./mkdist mcstas-tools-python-mccodelib $1 tools/Python/mccodelib/ "" rpm64-fedora "" -- rpm
@@ -57,7 +56,7 @@ export MCINSTALL_PREFIX=/usr/local/mcstas/$1
 if [ "x$2" != "x" ]; then
   cd meta-pkgs/rpm
 
-  for controlfile in `ls mcstas-suite-python.spec`
+  for controlfile in `ls mcstas-suite-python-ng.spec`
   do
     sed -i.bak s/@VERSION@/${1}/g $controlfile
     rpmbuild -bb --target x86_64 $controlfile

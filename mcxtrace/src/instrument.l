@@ -144,9 +144,13 @@ CPU           return TOK_CPUONLY;       /* extended McXtrace grammar with GPU-CP
 NOACC         return TOK_NOACC; 
 DEPENDENCY    return TOK_DEPENDENCY;
 SHELL         return TOK_SHELL;         /* extended McXtrace grammar with SHELL commands pre-cogen */
+SEARCH        return TOK_SEARCH;        /* additional Instrument/Component search directories */
+METADATA      return TOK_METADATA;
+
 
 "("|")"|"["|"]"|"{"|"}"|"," return yytext[0]; /* Punctuation. */
 "="|"*"       return yytext[0]; /* Operator. */
+"/"  return yytext[0]; /* special name, unit separator */
 
 {NUMBER}  yylval.number = str_dup(yytext); return TOK_NUMBER;
  /* Note: Since ID overlaps with NUMBER (eg. "2E3"), ID must come
@@ -159,7 +163,7 @@ SHELL         return TOK_SHELL;         /* extended McXtrace grammar with SHELL 
  * separate token, the new token must be added to the parser rules for
  * genatexp/topatexp.
  */
-"->"|"."|"!"|"~"|"++"|"--"|"+"|"-"|"&"|"sizeof"|"*"|"/"|"%"|"+"|"-"|"<<"|">>"|"<"|"<="|">"|">="|"=="|"!="|"^"|"|"|"&&"|"||"|"?"|":"|"+="|"-="|"*="|"/="|"%="|"&="|"^="|"|="|"<<="|">>="|"'" {
+"->"|"."|"!"|"~"|"++"|"--"|"+"|"-"|"&"|"sizeof"|"*"|"%"|"+"|"-"|"<<"|">>"|"<"|"<="|">"|">="|"=="|"!="|"^"|"|"|"&&"|"||"|"?"|":"|"+="|"-="|"*="|"/="|"%="|"&="|"^="|"|="|"<<="|">>="|"'" {
       yylval.string = str_dup(yytext);
       return TOK_CTOK;
 \

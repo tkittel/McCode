@@ -1,19 +1,20 @@
 /*******************************************************************************
 *
-* McXtrace, xray-tracing package
-*         Copyright (C) 1997-2017, All rights reserved
+* McXtrace, x-ray tracing package
+*         Copyright, All rights reserved
 *         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: MCPL_output
 *
-* %I
+* %Identification
 * Written by: Erik B Knudsen 
 * Date: Aug 2016
 * Origin: DTU Physics
 *
 * Detector-like component that writes photon state parameters into an mcpl-format binary, virtual-source photon file.
 *
-* %D
+* %Description
 * Detector-like component that writes photon state parameters into an mcpl-format 
 * binary, virtual-source photon file.
 *
@@ -32,12 +33,12 @@
 *
 * These features are set this way to keep file sizes as manageable as possible.
 *
-* %BUGS
+* Example: MCPL_output( filename="voutput", verbose=1, userflag="flag", userflagcomment="Photon Id", merge_mpi=1)
 *
-* %P
+* %Parameters
 * INPUT PARAMETERS
 *
-* filename:        [str] Name of photon file to write. Default is standard output [string]. If not given, a unique name will be used.
+* filename: [str]         Name of neutron file to write. If not given, the component name will be used.
 * verbose:         [1]   If 1) Print summary information for created MCPL file. 2) Also print summary of first 10 particles information stored in the MCPL file. >2) Also print information for first 10 particles as they are being stored by McXtrace.
 * polarisationuse: [1]   Enable storing the polarization state of the photon.
 * doubleprec:      [1]   Use double precision storage.
@@ -46,7 +47,7 @@
 * merge_mpi:       [1]   Flag to indicate if output should be merged in case of MPI.
 * keep_mpi_unmerged: [1] Flag to indicate if original unmerged mcpl-files should be kept (or deleted).
 * buffermax: [1]         Maximal number of events to save ( <= MAXINT), GPU/OpenACC only.
-* %E
+* %End
 *******************************************************************************/
 
 DEFINE COMPONENT MCPL_output
@@ -93,6 +94,9 @@ INITIALIZE
 %{
     char extension[128]="";
     char *myfilename;
+    
+    // Use instance name for base output if no input was given
+    if (!strcmp(filename,"\0")) sprintf(filename, NAME_CURRENT_COMP);
 
 #if defined (USE_MPI)
   /* In case of MPI, simply redefine the filename used by each node */

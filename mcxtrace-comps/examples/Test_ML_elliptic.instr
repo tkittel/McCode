@@ -1,7 +1,7 @@
 /*******************************************************************************
 *         McXtrace instrument definition URL=http://www.mcxtrace.org
 *
-* Instrument: test (rename also the example and DEFINE lines below)
+* Instrument: Test_ML_elliptic (rename also the example and DEFINE lines below)
 *
 * %Identification
 * Written by: Your name (email)
@@ -22,13 +22,12 @@
 * %Example: Test_ML_elliptic.instr S1=1 S2=2 gamma=1.2 fromfile=1 fxw=2e-2 fyh=1e-3 Detector: emon1_I=9.22372e-08
 *
 * %Parameters
-* s1: [m] Distance from source focus to multilayer centre.
-* s1: [m] Distance from multilayer centre to focal point
+* S1: [m] Distance from source focus to multilayer centre.
+* S1: [m] Distance from multilayer centre to focal point
 * gamma: [deg] Design glancing angle at centre.
 * fromfile: [ ] If nonzero read reflectivity number from a datafile ("reflectivity.txt")
-* 
-* %Link
-* A reference/HTML link for more information
+* fxw: [m] width of the beam
+* fxh: [m] height of the beam
 *
 * %End
 *******************************************************************************/
@@ -81,13 +80,13 @@ AT(0,0,1) RELATIVE source
 ROTATED (gamma,0,0) RELATIVE source
 
 COMPONENT ml0 = Multilayer_elliptic(
-    reflectivity_datafile = "Ref_W_B4C.txt", theta = gamma,
+    coating = "Ref_W_B4C.txt", theta = gamma,
     s1 = S1, s2 = S2, length = 0.1, width = 0.1, R0 = 1,
     Emin=7, Emax=10, Estep=0.05)
 WHEN (fromfile) AT (0, 0, 0) RELATIVE a1
 
 COMPONENT ml1 = Multilayer_elliptic(
-    reflectivity_datafile = "NULL", theta = gamma,
+    coating = "NULL", theta = gamma,
     s1 = S1, s2 = S2, length = 0.1, width = 0.1, R0 = 1,
     Emin=0, Emax=14.2, Estep=0.05,
     Gamma=0.2, Lambda=50, N=10, rho_AB=3.9817)

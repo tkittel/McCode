@@ -352,13 +352,13 @@ ROTATED (0,DMM_theta,0) RELATIVE oh0
 
 /* if only DMM is used the first mirror is toroidal due to the heat bump */
 COMPONENT DMM0a = Mirror_toroid(
-        xwidth=45e-3, zdepth=200e-3, reflec="w_b4c_si_3AArghn.dat", radius=DMM_rsag, radius_o=DMM_rmer)
+        xwidth=45e-3, zdepth=200e-3, coating="w_b4c_si_3AArghn.dat", radius=DMM_rsag, radius_o=DMM_rmer)
 WHEN (DMM && !DCM) AT (0,0,0) RELATIVE DMM0_a0
 ROTATED (0,0,-90) RELATIVE DMM0_a0
 
 /* if both monos are used, the first ML mirror is flat, no heat bump on it */
 COMPONENT DMM0b = Mirror(
-    xwidth=45e-3, zdepth=200e-3, reflectivity="w_b4c_si_3AArghn.dat")
+    xwidth=45e-3, zdepth=200e-3, coating="w_b4c_si_3AArghn.dat")
 WHEN (DCM && DMM) AT (0,0,0) RELATIVE DMM0_a0
 ROTATED (0,0,-90) RELATIVE DMM0_a0
 
@@ -371,7 +371,7 @@ AT(0,0,DMM_d) RELATIVE DMM0_a1
 ROTATED(0,-DMM_theta,0) RELATIVE DMM0_a1
 
 COMPONENT DMM1 = Mirror(
-    xwidth=45e-3, zdepth=200e-3, reflectivity="w_b4c_si_3AArghn.dat")
+    xwidth=45e-3, zdepth=200e-3, coating="w_b4c_si_3AArghn.dat")
 WHEN (DMM) AT (0,0,0) RELATIVE PREVIOUS
 ROTATED (0,0,90) RELATIVE PREVIOUS
 
@@ -466,14 +466,6 @@ AT(0,0,0) RELATIVE Imaging
 
 COMPONENT pxrd_2d_pt = Arm()
 AT(0,0,5.3) RELATIVE eh0
-
-/* COMPONENT 3x3mu_pxrd2 = E_monitor(nE=200, xmin=-1.5e-6, xmax=1.5e-6, ymin=-1.5e-6, */
-/*         ymax=1.5e-6, Emin=Efull_min,Emax=Efull_max, restore_xray=1,filename="pxrd2_3x3mu.emon") */
-/* AT (0, 0, -0.00002) RELATIVE pxrd_2d_pt */
-
-/* COMPONENT 10x10mu_pxrd2 = E_monitor(nE=200, xmin=-5e-6, xmax=5e-6, ymin=-5e-6, */
-/*         ymax=5e-6, Emin=Efull_min,Emax=Efull_max, restore_xray=1,filename="pxrd2_10x10mu.emon") */
-/* AT (0, 0, -0.00001) RELATIVE pxrd_2d_pt*/
 
 COMPONENT pxrd2_slit = Slit(xwidth=pxrd_sampleap_w,yheight=pxrd_sampleap_h)
 AT(0,0,-0.2) RELATIVE pxrd_2d_pt

@@ -1,13 +1,13 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
-*         Copyright (C), All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
+* McXtrace, x-ray tracing package
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: EPSD_monitor
 *
-* %I
+* %Identification
 * Written by: Erik B Knudsen
 * Date: June 22, 2009
 * Release: McXtrace 1.5
@@ -15,39 +15,35 @@
 *
 * Position-sensitive monitor.
 *
-* %D
+* %Description
 * An nx times ny pixel energy resolved PSD monitor, which only counts photons with energy in an interval
 * given by Emin and Emax in nE energy bins. The default energy interval is (almost) infinite, with a single bin.
 * If nE>1 the component will output nE detector files + one which is integrated over the full energy interval.
 *
-* Example: EPSD_monitor(xmin=-0.1, xmax=0.1, ymin=-0.1, ymax=0.1,
-            nx=90, ny=90, filename="Output.psd")
+* Example: EPSD_monitor(xwidth=0.1, yheight=0.1,
+*           nx=90, ny=90, filename="Output.psd")
 *
-* %P
+* %Parameters
 * INPUT PARAMETERS:
 *
-* xmin: [m]         Lower x bound of detector opening.
-* xmax: [m]         Upper x bound of detector opening.
-* ymin: [m]         Lower y bound of detector opening.
-* ymax: [m]         Upper y bound of detector opening.
 * Emin: [keV]       Lower bound of energy interval.
 * Emax: [keV]       Upper bound of energy interval.
-* xwidth: [m]       Width of detector. Overrides xmin,xmax.
-* yheight: [m]      Height of detector. Overrides ymin,ymax.
-* nx: [ ]           Number of pixel columns.
-* ny: [ ]           Number of pixel rows.
-* nE: [ ]           Number of energy bins.
+* xwidth: [m]       Width of detector. 
+* yheight: [m]      Height of detector. 
+* nx: [1]           Number of pixel columns.
+* ny: [1]           Number of pixel rows.
+* nE: [1]           Number of energy bins.
 * filename: [str]   Name of file in which to store the detector image.
-* restore_xray: [ ] If set, the monitor does not influence the xray state.
-* nowritefile: [1]      If set, monitor will skip writing to disk
+* restore_xray: [1] If set, the monitor does not influence the xray state.
+* nowritefile: [1]  If set, monitor will skip writing to disk
 *
-* %E
+* %End
 *******************************************************************************/
 
 DEFINE COMPONENT EPSD_monitor
 DEFINITION PARAMETERS ()
 SETTING PARAMETERS (int nx=90, int ny=90, string filename=0, int restore_xray=0,
-    xmin=-0.05, xmax=0.05, ymin=-0.05, ymax=0.05, xwidth=0, yheight=0, Emax=0, Emin=0, nE=1, int nowritefile=0)
+    xwidth=0.1, yheight=0.1, Emax=0, Emin=0, nE=1, int nowritefile=0)
 OUTPUT PARAMETERS ()
 /* X-ray parameters: (x,y,z,kx,ky,kz,phi,t,Ex,Ey,Ez,p) */ 
 
@@ -59,14 +55,18 @@ DECLARE
     DArray2d PSD_N_s;
     DArray2d PSD_p_s;
     DArray2d PSD_p2_s;
+    double xmin;
+    double xmax;
+    double ymin;
+    double ymax;
 %}
 
 INITIALIZE
 %{
     int i,j;
 
-    if (xwidth  > 0) { xmax = xwidth/2;  xmin = -xmax; }
-    if (yheight > 0) { ymax = yheight/2; ymin = -ymax; }
+    xmax = xwidth/2;  xmin = -xmax;
+    ymax = yheight/2; ymin = -ymax;
 
     if ((xmin >= xmax) || (ymin >= ymax)) {
       fprintf(stderr,"ERROR (%s): Null detection area! Aborting.\n",NAME_CURRENT_COMP);

@@ -1,7 +1,7 @@
 /*******************************************************************************
 * Instrument: DISCO beam-line at SOLEIL
 *
-* %I
+* %Identification
 * Written by: Stephane Bac, Emmanuel Farhi, Antoine Padovani
 * Date: 01/08/2022
 * Origin: SOLEIL
@@ -10,25 +10,25 @@
 *
 * DISCO beam-line at SOLEIL, imaging branch
 *
-* %D
+* %Description
 * DISCO beamline description here: https://hal.archives-ouvertes.fr/hal-01479318/document
 * You may scan the grating monochromator with e.g.:
 *   mxrun -n 1e5 SOLEIL_DISCO.instr -N84 x_screw=20,103 scan=1
 *
-* %Example: grazing_angle_one=22.5 -n 1e5 Detector: second_HFP_I=1.71771e+11
+* %Example: grazing_angle_one=22.5 -n 1e5 Detector: second_HFP_I=2.08292e+11
 *
-* %P
-* grazing_angle_one: [deg]
+* %Parameters
+* grazing_angle_one: [deg] Mirrors M1/M2 rotation angle
 * HFP_shift: [m] z translation from the HFP position (horizontal focal point detector)
 * VFP_shift: [m] z translation from the VFP position (vertical focal point detector)
 * second_HFP_shift: [m] z translation second HFP position
 * x_screw: [mm] length of the screw
 * scan: [] if there is an x_screw scan [1], calculate the Wavelength(Angstroms) as a function of x_screw(mm)
 *
-* %L
+* %Link
 * https://www.synchrotron-soleil.fr/en/beamlines/disco
 *
-* %E
+* %End
 *******************************************************************************/
 
 //Work in progress.
@@ -80,10 +80,8 @@ AT (0, 0, 0) ABSOLUTE
 
 /* -------------------------------------------------- Source */
 COMPONENT Source = Bending_magnet(
-    E0=E0,   
-    dE = dE,
-    B=1.71,
-    Ee=2.75
+    E0=E0, dE = dE,
+    Ee = 2.75, Ie = 0.5, B = 1.72, sigex=45.5e-6, sigey=18.4e-6
     )
 AT (0, 0, 0) RELATIVE Origin
 
@@ -159,7 +157,7 @@ COMPONENT M2 = Mirror_toroid_pothole(
     zdepth = 0.19,
     radius = 2.56, 
     radius_o = 21.04,
-    reflec="Si_disco.dat")
+    coating="Si_disco.dat")
 AT (0,0,0) RELATIVE PREVIOUS
 ROTATED (0, 0, 0) RELATIVE PREVIOUS
 EXTEND
@@ -195,7 +193,7 @@ ROTATED (0, 0, 0) RELATIVE HFP_location
 COMPONENT M3 = Mirror_curved(
   coating="Si_disco.dat", radius=9.93, length=240e-3, width=30e-3)
 AT (0,0,0) RELATIVE PREVIOUS
-ROTATED (0, 22.5, 0) RELATIVE PREVIOUS
+ROTATED (0, grazing_angle_one, 0) RELATIVE PREVIOUS
 EXTEND
 %{ 
 	if (!SCATTERED) ABSORB;
@@ -203,7 +201,7 @@ EXTEND
 
 COMPONENT M3_takeoff = Arm()
 AT (0, 0, 0) RELATIVE PREVIOUS	
-ROTATED (0, 22.5, 0) RELATIVE PREVIOUS
+ROTATED (0, grazing_angle_one, 0) RELATIVE PREVIOUS
 
 COMPONENT M3_yz = Arm()
 AT (0,0,0) RELATIVE PREVIOUS //to do like before
@@ -216,9 +214,9 @@ AT (0,0,0.2) RELATIVE PREVIOUS
 COMPONENT M4 = Mirror(
     xwidth=30e-3,
     zdepth=240e-3,
-    reflectivity="Si_disco.dat")
+    coating="Si_disco.dat")
 AT (0, 0, 0) RELATIVE PREVIOUS	
-ROTATED ( -22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED ( -grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 EXTEND
 %{ 
 	if (!SCATTERED) ABSORB;
@@ -226,7 +224,7 @@ EXTEND
 
 COMPONENT M4_takeoff = Arm()
 AT (0, 0, 0) RELATIVE PREVIOUS	
-ROTATED ( -22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED ( -grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 
 //rotate 90 back so our repere is normal again
 COMPONENT M4_arm_back = Arm()
@@ -258,7 +256,7 @@ COMPONENT M51 = Mirror_elliptic(
     z_c=35,
     coating="Si_disco.dat")
 AT (0, 0, 0) RELATIVE PREVIOUS
-ROTATED (22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED (grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 EXTEND
 %{ 
 	if (!SCATTERED) ABSORB;
@@ -266,7 +264,7 @@ EXTEND
 
 COMPONENT arm = Arm()
 AT (0, 0, 0) RELATIVE PREVIOUS
-ROTATED (22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED (grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 
 //rotate 90 back so our frame is normal again
 COMPONENT M51_arm_back = Arm()
@@ -324,9 +322,9 @@ COMPONENT M53 = Mirror_toroid_pothole(
     zdepth = 130e-3,
     radius = 0.714,
     radius_o=4.75,
-    reflec="AlMgF2_disco.dat")
+    coating="AlMgF2_disco.dat")
 AT (0,0,0) RELATIVE PREVIOUS
-ROTATED (-22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED (-grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 EXTEND
 %{ 
 	if (!SCATTERED) ABSORB;
@@ -334,7 +332,7 @@ EXTEND
 
 COMPONENT M53_takeoff = Arm()
 AT (0,0,0) RELATIVE PREVIOUS
-ROTATED (-22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED (-grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 
 //____________________________________________________________  44.750 m : M54 toroidal mirror (horizontal deviation) / 22.5° /  AlMgF2 / R = 7.80 m, r = 1.12 m  
 
@@ -350,9 +348,9 @@ COMPONENT M54 = Mirror_toroid_pothole(
     zdepth = 110e-3,
     radius = 1.12,
     radius_o=7.8,
-    reflec="AlMgF2_disco.dat")    
+    coating="AlMgF2_disco.dat")    
 AT (0,0,0) RELATIVE PREVIOUS
-ROTATED (-22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED (-grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 EXTEND
 %{ 
 	if (!SCATTERED) ABSORB;
@@ -360,7 +358,7 @@ EXTEND
 
 COMPONENT M54_takeoff = Arm()
 AT (0,0,0) RELATIVE PREVIOUS
-ROTATED (-22.5, 0, 0) RELATIVE PREVIOUS
+ROTATED (-grazing_angle_one, 0, 0) RELATIVE PREVIOUS
 
 COMPONENT Mtoroids_arm_back = Arm()
 AT (0,0,0) RELATIVE PREVIOUS
@@ -482,10 +480,8 @@ AT (0, 0, 0) RELATIVE PREVIOUS
 
 COMPONENT psd_monitor = PSD_monitor(
     filename="psd", 
-    xmin=-0.001, 
-    xmax=0.001,
-    ymin=-0.01, 
-    ymax=0.01,             
+    xwidth=0.002, 
+    yheight=0.02,             
     nx=100,
     ny=100,
     restore_xray = 1

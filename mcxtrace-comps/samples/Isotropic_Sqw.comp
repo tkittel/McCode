@@ -1,13 +1,13 @@
 /*****************************************************************************
 *
 * McXtrace, X-ray tracing package
-*         Copyright 1997-2022, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
 *         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Isotropic_Sqw
 *
-* %I
+* %Identification
 * Written by: E. Farhi, V. Hugouvieux
 * Date: March 2022
 * Origin:  Synchrotron SOLEIL
@@ -20,7 +20,7 @@
 * Isotropic sample handling multiple scattering and absorption for a general
 * S(q,w) (coherent)
 *
-* %D
+* %Description
 * An isotropic sample handling multiple scattering and including as input the
 * dynamic structure factor of the chosen sample (e.g. from Molecular
 * Dynamics). Handles elastic/inelastic, coherent scattering -
@@ -160,8 +160,7 @@
 * for which column 1 is 'q' and column 2 is 'S(q)'.
 *
 * <b>Examples:</b>
-* 1- liq-4He parameters
-*   Isotropic_Sqw(..., Sqw_coh="He4_liq_coh.sqw", T=10, p_interact=0.3)
+* Isotropic_Sqw(radius=0.0005, yheight=0.001, Sqw_coh="Rb_liq_coh.sqw",verbose=3, p_interact=0.95)
 *
 * 2- powder sample
 *  Isotropic_Sqw(..., Sqw_coh="Al.laz")
@@ -170,7 +169,7 @@
 * When used in concentric mode, multiple bouncing scattering
 * (traversing the hollow part) is not taken into account.
 *
-* %P
+* %Parameters
 * INPUT PARAMETERS:
 * Sqw_coh: [str]              Name of the file containing the values of Q, w and S(Q,w) Coherent part; Q in Angs-1, E in meV, S(q,w) in meV-1. Use 0, NULL or "" to disable.
 * material: [str]             Absorption file.
@@ -213,10 +212,10 @@
 * %Link
 * Atomic form factors f http://lampx.tugraz.at/~hadley/ss1/crystaldiffraction/atomicformfactors/formfactors.php
 * E. Farhi, V. Hugouvieux, M.R. Johnson, and W. Kob, Journal of Computational Physics 228 (2009) 5251-5261 "Virtual experiments: Combining realistic neutron scattering instrument and sample simulations"
-* %L
+* %Link
 * H. Schober, Collection SFN 10 (2010) 159-336
 *
-* %E
+* %End
 ***********************************************************/
 
 DEFINE COMPONENT Isotropic_Sqw
@@ -459,6 +458,7 @@ t_Table *Sqw_read_PowderN(struct Sqw_sample_struct *Sqw, t_Table sqwTable)
   int    list_count=0;
   double q_step_cur;
   char   flag_qSq = 0;
+  double sum_F2=0;
 
   t_Table *retTable;
 
@@ -466,18 +466,18 @@ t_Table *Sqw_read_PowderN(struct Sqw_sample_struct *Sqw, t_Table sqwTable)
 
   MPI_MASTER(
   if (Sqw->powder_columns_order[0] == 4 && Sqw->barns !=0)
-    printf("Isotropic_sqw: %s: Powder file probably of type Crystallographica/Fullprof (lau)\n"
+    printf("Isotropic_Sqw: %s: Powder file probably of type Crystallographica/Fullprof (lau)\n"
            "WARNING:       but F2 unit is set to powder_barns=1 (barns). Intensity might be 100 times too high.\n",
            Sqw->compname);
   if (Sqw->powder_columns_order[0] == 17 && Sqw->barns == 0)
-    printf("Isotropic_sqw: %s: Powder file probably of type Lazy Pulver (laz)\n"
+    printf("Isotropic_Sqw: %s: Powder file probably of type Lazy Pulver (laz)\n"
            "WARNING:       but F2 unit is set to powder_barns=0 (fm^2). Intensity might be 100 times too low.\n",
            Sqw->compname);
   );
   size = sqwTable.rows;
   MPI_MASTER(
   if (Sqw->verbose_output > 0) {
-    printf("Isotropic_sqw: Converting %ld %s from %s into S(q,w) data\n",
+    printf("Isotropic_Sqw: Converting %ld %s from %s into S(q,w) data\n",
         size, flag_qSq ? "S(q)" : "powder lines", sqwTable.filename);
   }
   );
@@ -526,7 +526,7 @@ t_Table *Sqw_read_PowderN(struct Sqw_sample_struct *Sqw, t_Table sqwTable)
       d = (q > 0 ? 2*PI/d : 0);
       if (j == 0 || d == 0 || q == 0) {
         MPI_MASTER(
-        printf("Isotropic_sqw: %s: Warning: line %i has invalid definition\n"
+        printf("Isotropic_Sqw: %s: Warning: line %i has invalid definition\n"
                "         (mult=0 or q=0 or d=0)\n", Sqw->compname, i);
         );
         continue;
@@ -536,6 +536,7 @@ t_Table *Sqw_read_PowderN(struct Sqw_sample_struct *Sqw, t_Table sqwTable)
       list[list_count].DWfactor = DWfactor;
       list[list_count].w = w;
       list[list_count].F2= F2; /* or S(q) if flag_qSq */
+      sum_F2            += F2;
 
       if (q_max < d) q_max = q;
       if (q_min > d) q_min = q;
@@ -578,6 +579,13 @@ t_Table *Sqw_read_PowderN(struct Sqw_sample_struct *Sqw, t_Table sqwTable)
       }
       list_count++;
     } /* end for */
+    
+  if (!sum_F2) {
+    MPI_MASTER(
+    exit(fprintf(stderr, "Isotropic_Sqw: ERROR: all %i structure factors in file '%s' are null. Check the reflection list.\n",
+      i, sqwTable.filename));
+    );
+  }
 
   /* now builds new Table_Array to continue with Sqw_readfile */
   if (q_max == q_min || !q_step) return(NULL);
@@ -588,7 +596,7 @@ t_Table *Sqw_read_PowderN(struct Sqw_sample_struct *Sqw, t_Table sqwTable)
   q_step = q_max/size;
   MPI_MASTER(
   if (Sqw->verbose_output > 0)
-    printf("Isotropic_sqw: q range [%g:%g], creating %li elements vector\n",
+    printf("Isotropic_Sqw: q range [%g:%g], creating %li elements vector\n",
         q_min, q_max, size);
   );
 

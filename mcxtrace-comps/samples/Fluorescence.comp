@@ -1,20 +1,20 @@
 /*****************************************************************************
 *
 * McXtrace, X-ray tracing package
-*         Copyright 1997-2022, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
+*         Copyright, All rights reserved
+*         DTU Physics, Kgs. Lyngby, Denmark
 *         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Fluorescence
 *
-* %I
+* %Identification
 * Written by: E. Farhi
 * Date:       March 2022
 * Origin:     Synchrotron SOLEIL
 *
 * Sample model handling absorption, fluorescence, Compton and Rayleigh scattering.
 *
-* %D
+* %Description
 * Sample that models many photon-matter interactions:
 * - absorption (photon excites an electron and creates a hole)
 * - fluorescence (excited electrons emit light while falling into lower states)
@@ -24,6 +24,10 @@
 * An important option to enhance statistics is to set 'p_interact' to, say,
 * 30 percent (0.3) in order to force a fraction of the beam to scatter. This
 * will result on a larger number of scattered events, retaining intensity.
+*
+* The 'material' specification is given as a chemical formulae, e.g. "LaB6". It
+* may also be given as a file name (CIF/LAU/LAZ/FullProf format) in which case 
+* the formulae is guessed (but may be approximative).
 *
 * <b>Sample shape:</b>
 * Sample shape may be a cylinder, a sphere, a box or any other shape
@@ -66,8 +70,15 @@
 *
 * The computation is made via the XRayLib (apt install libxrl-dev).
 *
+* Example: Fluorescence(material="LaB6",
+*  xwidth=0.001,yheight=0.001,zdepth=0.0001, p_interact=0.99,
+*  target_index=1, focus_xw=0.0005, focus_yh=0.0005)
+*
+* This sample component can advantageously benefit from the SPLIT feature, e.g.
+* SPLIT COMPONENT pow = Fluorescence(...)
+*
 * %Parameters
-* material:  [str]    Chemical formulae, e.g. "LaB6", "Pb2SnO4".
+* material:  [str]    Chemical formulae, e.g. "LaB6", "Pb2SnO4". If may also be a CIF/LAZ/LAU file.
 * weight:    [g/mol]  Atomic/molecular weight of material.
 * density:   [g/cm^3] Density of material. V_rho=density/weight/1e24*N_A.
 * rho:       [AA-3]   Density of scattering elements (nb atoms/unit cell V_0).
@@ -89,23 +100,25 @@
 * target_x:  [m]      Position of target to focus at, along X.
 * target_y:  [m]      Position of target to focus at, along Y.
 * target_z:  [m]      Position of target to focus at, along Z.
+* flag_compton: [m]   When 0, the Compton  scattering is ignored.
+* flag_rayleigh:[m]   When 0, the Rayleigh scattering is ignored.
 *
 * OUTPUT PARAMETERS:
 * type: scattering event type 0=fluorescence, 1=Rayleigh, 2=Compton, 3=transmit
 *
 * %Link
 * The XRayLib https://github.com/tschoonj/xraylib
-* %L
+* %Link
 * Fluorescence https://en.wikipedia.org/wiki/Fluorescence
-* %L
+* %Link
 * Rayleigh https://en.wikipedia.org/wiki/Rayleigh_scattering
-* %L
+* %Link
 * Compton https://en.wikipedia.org/wiki/Compton_scattering
-* %L
+* %Link
 * X-ray absorption edges http://skuld.bmsc.washington.edu/scatter/AS_periodic.html
-* %L
+* %Link
 * X-ray fluorescence spectra http://www.xrfresearch.com/xrf-spectra/
-* %L
+* %Link
 * X-ray edges and fluo lines https://physics.nist.gov/PhysRefData/XrayTrans/Html/search.html
 *
 * %E
@@ -120,10 +133,11 @@ SETTING PARAMETERS(
   string material="LaB6", packing_factor=0, rho=0, density=0, weight=0, 
   p_interact=0, 
   target_x = 0, target_y = 0, target_z = 0, focus_r = 0,
-  focus_xw=0, focus_yh=0, focus_aw=0, focus_ah=0, int target_index=0)
+  focus_xw=0, focus_yh=0, focus_aw=0, focus_ah=0, int target_index=0,
+  int flag_compton=1, int flag_rayleigh=1)
 OUTPUT PARAMETERS ()
 /* X-ray parameters: (x,y,z,kx,ky,kz,phi,t,Ex,Ey,Ez,p) */
-DEPENDENCY "-Wl,-rpath,GETPATH(lib) -LGETPATH(lib) -lxrl -IGETPATH(include)"
+DEPENDENCY "-Wl,-rpath,GETPATH(lib) -LGETPATH(lib) -lxrl -IGETPATH(include) -DUSE_OFF"
 NOACC
 
 /* ========================================================================== */
@@ -134,8 +148,10 @@ SHARE %{
   #define FLUORESCENCE 0  // Fluo
   #define RAYLEIGH     1  // Coherent
   #define COMPTON      2  // Incoherent
+  #define TRANSMISSION 3
   #include <xraylib/xraylib.h>
   #endif
+  %include "read_table-lib"
   %include "interoff-lib" // for OFF/PLY geometry
   
 /* See XrayLib code (c) T. Schoonjans
@@ -238,6 +254,107 @@ double XRMC_SelectFluorescenceEnergy(int Z, double E0, double *dE)
   return LineEnergy(Z, -i_line, NULL); // fluorescent line energy
 } // XRMC_SelectFluorescenceEnergy
 
+  // Function removing spaces from string
+  char * removeSpacesFromStr(char *string)
+  {
+      // non_space_count to keep the frequency of non space characters
+      int non_space_count = 0;
+   
+      //Traverse a string and if it is non space character then, place it at index non_space_count
+      for (int i = 0; string[i] != '\0'; i++)
+      {
+          if (isalpha(string[i]) || isdigit(string[i]))
+          {
+              string[non_space_count] = string[i];
+              non_space_count++; //non_space_count incremented
+          }    
+      }
+      
+      //Finally placing final character at the string end
+      string[non_space_count] = '\0';
+      return string;
+  }
+
+  // ok = fluo_get_material(material, formula)
+  // extracts material atoms from file header
+  // the result is concatenated into 'formula'
+  int fluo_get_material(char *filename, char *formula) {
+  
+    int  ret = 0;
+    char Line[65535];
+    int flag_found_cif=0;
+    FILE *file = fopen(filename, "r");
+    if (!file)
+      exit(fprintf(stderr, "%s: ERROR: can not open file %s\n", 
+      __FILE__, filename));
+    
+    // Read the file, and search tokens in rows
+    formula[0]=0;
+    while (fgets(Line, sizeof(Line), file) != NULL) {
+      char *token = NULL;
+      int   flag_exit=0;
+      char *first_non_space=NULL;
+      char *next_non_space =NULL;
+      // CIF: _chemical_formula_structural 'chemical_formulae'
+      // CIF: _chemical_formula_sum 'chemical_formulae'
+      // LAZ/LAU: # ATOM <at> <trailing>
+      // LAZ/LAU: # Atom <at> <trailing>
+      // LAZ/LAU: # TITLE <at> <at> ... [ trailing...]
+      // CFL: Title <chemical_formulae>
+      // CFL: Atom <at> <trailing>
+      
+      // search for CIF token
+      // single line: search " '\'" delimiter after CIF token, marks reading the formula
+      if (!strncasecmp(Line, "_chemical_formula_structural", 28) 
+       || !strncasecmp(Line, "_chemical_formula_sum", 21) 
+       || !strncasecmp(Line, "_chemical_formula_moiety", 24)
+       || flag_found_cif) {
+        if  (flag_found_cif) { flag_found_cif=0; /* can not span on more that 2 lines */} 
+        else flag_found_cif=1;
+        // search for delimiter after the CIF token
+        char *first_space_after_token=strpbrk(Line, " \'\n");
+        if (first_space_after_token) {
+          // search for the characters that may compose the formula
+          first_non_space = strpbrk(first_space_after_token, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789()[]");
+          if (strchr(first_space_after_token,'?')) {
+            // we have an invalid/unknown formula in the CIF. Skip CIF token/line
+            flag_found_cif=0;
+            continue;
+          }
+        }
+        if (first_non_space) 
+          next_non_space  = strpbrk(first_non_space+1, "\'\n\r"); // position of formula end
+        if (next_non_space) { 
+          flag_exit = 1;
+          token = first_non_space;
+        }
+      } else if (!strncasecmp(Line, "# TITLE", 7) && strchr(Line, '['))
+        token = Line+7;
+      else if (!strncasecmp(Line, "# Atom", 6))
+        token = Line+6;
+      else if (!strncasecmp(Line, "Atom", 4))
+        token = Line+4;
+      else if (!strncasecmp(Line, "Title", 5))
+        token = Line+7;
+      if (!token) continue;
+      if (!strncasecmp(Line, "# TITLE", 7)) {
+        first_non_space = Line+7;
+        next_non_space  = strchr(Line+7, '[');
+        if (next_non_space) flag_exit = 1;
+      }
+      if (!first_non_space) first_non_space = strtok(token, " \t\n");
+      if (!first_non_space) continue;
+      if (!next_non_space)  next_non_space  = strtok(NULL,  " \t\n"); // end of formulae
+      if (!next_non_space)  next_non_space = Line+strlen(Line);
+      // remove spaces
+      strncat(formula, first_non_space, next_non_space-first_non_space);
+      ret++;
+      if (flag_exit) break;
+    }
+    fclose(file);
+    removeSpacesFromStr(formula);
+    return(ret);
+  } // fluo_get_material
 %}
 
 /* ========================================================================== */
@@ -248,7 +365,6 @@ DECLARE %{
   DArray1d cum_xs_fluo;
   DArray1d cum_xs_Compton;
   DArray1d cum_xs_Rayleigh;
-  int  type;
   int  shape;
   off_struct offdata;
   int  n_fluo;
@@ -257,6 +373,20 @@ DECLARE %{
   double p_fluo;
   double p_Compton;
   double p_Rayleigh;
+  
+  // cached values for SPLIT
+  int    reuse_nb;
+  int    reuse_intersect;
+  double reuse_ki;
+  double reuse_l0;
+  double reuse_l1;
+  double reuse_l2;
+  double reuse_l3;
+  double reuse_sigma_barn;
+  DArray1d reuse_cum_xs_fluo;
+  DArray1d reuse_cum_xs_Compton;
+  DArray1d reuse_cum_xs_Rayleigh;
+  char *filename;
 %}
 
 INITIALIZE %{
@@ -288,12 +418,37 @@ INITIALIZE %{
                         "ERROR       Please check parameter values (xwidth, yheight, zdepth, radius).\n", NAME_CURRENT_COMP));
   
   if (!material || !strlen(material) || !strcmp(material, "NULL") || !strcmp(material, "0")) 
-    exit(fprintf(stderr, "ERROR: %s: Null material specification\n", NAME_CURRENT_COMP));
+    exit(fprintf(stderr, "Fluorescence: ERROR: %s: Null material specification\n", NAME_CURRENT_COMP));
+    
+  // test if the material is given as a file
+  char path[1024];
+  char formula[65536];
+  formula[0]='\0';
+  FILE *file = Open_File(material, "r", path);
+  if (file != NULL) {
+    fclose(file);
+    // open the material structure file (laz/lau/cif...)
+    // search (case sensitive) along lines
+    if (!fluo_get_material(material, formula))
+      exit(fprintf(stderr, "ERROR: %s: file %s does not contain material formulae.\n", NAME_CURRENT_COMP, material));
+    
+    fprintf(stderr, "Fluorescence: INFO: %s: found material %s from file %s\n", NAME_CURRENT_COMP, formula, material);
+    strcpy(material, formula);
+    // CIF: _chemical_formula_structural 'chemical_formulae'
+    // CIF: _chemical_formula_sum 'chemical_formulae'
+    // LAZ/LAU: # ATOM <at> <trailing>
+    // LAZ/LAU: # Atom <at> <trailing>
+    // LAZ/LAU: # TITLE <at> <at> ... [ trailing...]
+    // CFL: Title <chemical_formulae>
+    // CFL: Atom <at> <trailing>
+    
+  } else filename = NULL;
     
   compound = CompoundParser(material, &error); /* XRayLib */
-  if (error != NULL) 
+  if (error != NULL) {
     exit(fprintf(stderr, "ERROR: %s: Invalid material %s: %s\n",
       NAME_CURRENT_COMP, material, error->message));
+  }
   xrl_error_free(error);
   
   /* compute total density for raw material and display information ========= */  
@@ -341,6 +496,7 @@ INITIALIZE %{
       printf(" packing_factor=%g", packing_factor);
     printf("\n");
   )
+  if (0 < packing_factor && packing_factor < 1) rho *= packing_factor;
   
   /* target for scattering ================================================== */
   if (!target_index && !target_x && !target_y && !target_z) target_index=1;
@@ -360,11 +516,20 @@ INITIALIZE %{
   
   n_fluo = n_Compton = n_Rayleigh = 0;
   p_fluo = p_Compton = p_Rayleigh = 0;
+  
+  // cached variables set to 0 (for SPLIT)
+  reuse_nb=0;
+  reuse_ki=reuse_l0=reuse_l3=0;
+  reuse_cum_xs_fluo              = create_darr1d(compound->nElements+1);
+  reuse_cum_xs_Compton           = create_darr1d(compound->nElements+1);
+  reuse_cum_xs_Rayleigh          = create_darr1d(compound->nElements+1);
 %}
 
 TRACE %{
 
-int    intersect=0;     /* flag to continue/stop */
+int    intersect=0;       /* flag to continue/stop */
+int    reuse=0;
+int  type;
 double l0,  l1,  l2,  l3; /* times for intersections */
 double dl0, dl1, dl2, dl; /* time intervals */
 int    flag_concentric = 0;
@@ -392,6 +557,19 @@ ki   = sqrt(kx*kx+ky*ky+kz*kz); //  Angs-1
 kf   = ki;
 Ei   = K2E*ki; // keV
 
+// test for a SPLIT event (same particle comes in)
+if (fabs(reuse_ki - ki) < 1e-15) {
+  reuse     = 1;
+  reuse_nb++;
+  // use cached values and skip actual computation
+  intersect = reuse_intersect;
+  l0        = reuse_l0;
+  l1        = reuse_l1;
+  l2        = reuse_l2;
+  l3        = reuse_l3;
+} else {
+  // we have a different event: compute intersection lengths
+  
 /* ========================================================================== */
 /*                                   GEOMETRY                                 */
 /* ========================================================================== */
@@ -451,6 +629,17 @@ if (intersect && p_interact >= 0) {
   if (!flag_ishollow) l1 = l2 = l3; /* no empty space inside */
 } /* if intersect */
 
+
+// store values for potential next SPLIT
+reuse           = 0;
+reuse_intersect = intersect;
+reuse_l0        = l0;
+reuse_l1        = l1;
+reuse_l2        = l2;
+reuse_l3        = l3;
+reuse_ki        = ki;
+} // if !reuse (SPLIT)
+
 if (intersect) { /* the photon hits the sample */
 
   if (l0 > 0) {  /* we are before the sample */
@@ -500,21 +689,43 @@ if (intersect) {
   
   /* compute total scattering cross section for incoming photon energy Ei */
   /* compute each contribution XS */
-  xs[FLUORESCENCE]=xs[COMPTON]=xs[RAYLEIGH]=xs[3]=sigma_barn=0;
+  xs[FLUORESCENCE]=xs[COMPTON]=xs[RAYLEIGH]=xs[TRANSMISSION]=sigma_barn=0;
   cum_xs_fluo[0] = cum_xs_Compton[0] = cum_xs_Rayleigh[0] = 0;
-  for (i_Z=0; i_Z< compound->nElements; i_Z++) {
-    int    Z   = compound->Elements[i_Z];
-    double frac= compound->massFractions[i_Z];
-    double xs_Z[3];
+  if (!reuse) {
+    for (i_Z=0; i_Z< compound->nElements; i_Z++) {
+      int    Z   = compound->Elements[i_Z];
+      double frac= compound->massFractions[i_Z];
+      double xs_Z[3];
 
-    // get Fluorescence xs
-    XRMC_CrossSections(Z, Ei, xs_Z); // [barn/atom]
-    sigma_barn            += frac*CSb_Total(Z, Ei, NULL); // Photo+Compton+Rayleigh
-    cum_xs_fluo[i_Z+1]     = cum_xs_fluo[i_Z]    +frac*xs_Z[FLUORESCENCE];
-    cum_xs_Compton[i_Z+1]  = cum_xs_Compton[i_Z] +frac*xs_Z[COMPTON];
-    cum_xs_Rayleigh[i_Z+1] = cum_xs_Rayleigh[i_Z]+frac*xs_Z[RAYLEIGH];
-    for (i=0; i<3; i++) { xs[i] += frac*xs_Z[i]; }
-  } // for Z in compound
+      // get Fluorescence xs
+      XRMC_CrossSections(Z, Ei, xs_Z); // [barn/atom]
+      sigma_barn            += frac*CSb_Total(Z, Ei, NULL); // Photo+Compton+Rayleigh
+      cum_xs_fluo[i_Z+1]     = cum_xs_fluo[i_Z]    +frac*xs_Z[FLUORESCENCE];
+      cum_xs_Compton[i_Z+1]  = cum_xs_Compton[i_Z] +frac*xs_Z[COMPTON];
+      cum_xs_Rayleigh[i_Z+1] = cum_xs_Rayleigh[i_Z]+frac*xs_Z[RAYLEIGH];
+      for (i=0; i<3; i++) { xs[i] += frac*xs_Z[i]; }
+    } // for Z in compound
+    
+    // store values into cache for SPLIT
+    for (i_Z=0; i_Z< compound->nElements; i_Z++) {
+      reuse_cum_xs_fluo[i_Z+1]     = cum_xs_fluo[i_Z+1];
+      reuse_cum_xs_Compton[i_Z+1]  = cum_xs_Compton[i_Z+1];
+      reuse_cum_xs_Rayleigh[i_Z+1] = cum_xs_Rayleigh[i_Z+1];
+    }
+    reuse_sigma_barn = sigma_barn;
+  } else {
+    // reuse cached values (SPLIT)
+    for (i_Z=0; i_Z< compound->nElements; i_Z++) {
+      cum_xs_fluo[i_Z+1]     = reuse_cum_xs_fluo[i_Z+1];
+      cum_xs_Compton[i_Z+1]  = reuse_cum_xs_Compton[i_Z+1];
+      cum_xs_Rayleigh[i_Z+1] = reuse_cum_xs_Rayleigh[i_Z+1];
+      xs[FLUORESCENCE]      += reuse_cum_xs_fluo[i_Z+1];
+      xs[COMPTON]           += reuse_cum_xs_Compton[i_Z+1];
+      xs[RAYLEIGH]          += reuse_cum_xs_Rayleigh[i_Z+1];
+    }
+    
+    sigma_barn = reuse_sigma_barn;
+  }
   
   /* probability to absorb/scatter */
   my_s   = rho*100*sigma_barn; /* mu, 100: convert from barns to fm^2. my_s in [1/m] */
@@ -550,11 +761,12 @@ if (intersect) {
     
   } else {
     /* we go through the material without interaction, and exit */
-    type = 3; // 3 transmission
+    type = TRANSMISSION; // 3 transmission
     intersect = 0;
     PROP_DL(dl0+dl2);
     /* attenuate beam by portion which is scattered (and left along) */
-    p *= fabs(p_trans/mc_trans);
+    p *= p_trans;
+    if (p_interact>0 && p_interact<=1) p /= mc_trans;
   }
   
 } /* if intersect (propagate) */
@@ -578,9 +790,11 @@ if (intersect) { /* scattering event */
       i_Z = XRMC_SelectFromDistribution(cum_xs_fluo,     compound->nElements+1);
       break;
     case RAYLEIGH:
+      if (!flag_rayleigh) ABSORB;
       i_Z = XRMC_SelectFromDistribution(cum_xs_Rayleigh, compound->nElements+1);
       break;
     case COMPTON:
+      if (!flag_compton) ABSORB;
       i_Z = XRMC_SelectFromDistribution(cum_xs_Compton,  compound->nElements+1);
       break;
     default:
@@ -605,6 +819,7 @@ if (intersect) { /* scattering event */
     randvec_target_circle(&kf_x, &kf_y, &kf_z, &solid_angle, aim_x, aim_y, aim_z, focus_r);
   }
   p *= solid_angle/(4*PI); // correct for selected solid-angle
+  NORM(kf_x, kf_y, kf_z);  // normalize the outout direction |kf|=1
   
   // determine final energy
   switch (type) {
@@ -636,7 +851,6 @@ if (intersect) { /* scattering event */
   }
   Ef = K2E*kf;
   
-  NORM(kf_x, kf_y, kf_z);
   kx = kf*kf_x;
   ky = kf*kf_y;
   kz = kf*kf_z;
@@ -648,6 +862,8 @@ if (intersect) { /* scattering event */
 
 FINALLY %{
   FreeCompoundData(compound);
+  if (filename && filename != material)
+    unlink(filename);
   printf("%s: scattered intensity: fluo=%g Compton=%g Rayleigh=%g\n", 
     NAME_CURRENT_COMP, p_fluo, p_Compton, p_Rayleigh);
 %}

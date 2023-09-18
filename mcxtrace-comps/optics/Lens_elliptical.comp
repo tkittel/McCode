@@ -1,34 +1,36 @@
 /*******************************************************************************
 *
-* McXtrace, X-ray tracing package
+* McXtrace, x-ray tracing package
 *         Copyright, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
-*         University of Copenhagen, Copenhagen, Denmark
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Lens_parab
 *
-* %I
+* %Identification
 * Written by: Jana Baltser and Erik Knudsen
 * Date: August 2010
 * Origin: NBI
 *
 * X-ray compound refractive lens (CRL) with an elliptic profile
 *
-* %D
+* %Description
 * A simple X-ray compound refractive lens (CRL) with an elliptic profile simulates the photons' movement on passing through it.
 * Attenuation coefficient mu is taken from the NIST database and Be.txt
 * 
-* %P
+* %Parameters
 * Input parameters:
-* r1 - radius of the profile along the X axis;
-* r2 - radius of the profile along the Y axis;
-* w - parabola parameter, constraining it along the propagation axis;
-* d - distance between two surfaces of the lens along the propagation axis;
-* N - amount of single lenses in a stack.
-* Transmission - transmission of the lens
+* r1: radius of the profile along the X axis [m]
+* r2: radius of the profile along the Y axis [m]
+* w: parabola parameter, constraining it along the propagation axis [m]
+* d: distance between two surfaces of the lens along the propagation axis [m]
+* N: amount of single lenses in a stack [1]
+* material_datafile:     File where the material parameters for the filter may be found. Format is similar to what may be found off the NIST website. [Be.txt]
+* 
+* %Link
+* material datafile obtained from http://physics.nist.gov/cgi-bin/ffast/ffast.pl
 *
-* %E
+* %End
 *******************************************************************************/
 
 
@@ -174,7 +176,8 @@ DECLARE
 INITIALIZE 
 %{
   t_Table T;
-  Table_Read(&T, material_datafile,0);
+  if (Table_Read(&T, material_datafile,0) <= 0)
+    exit(fprintf(stderr, "Error (%s): Could not read %s. Aborting.\n",NAME_CURRENT_COMP, material_datafile));
   char **header_parsed;
   header_parsed=Table_ParseHeader(T.header,"Z","A[r]","rho");
   if (!Z) Z=strtol(header_parsed[0],NULL,10);  
@@ -248,13 +251,8 @@ TRACE
     kx=outg.k[0]; ky=outg.k[1]; kz=outg.k[2];
     incid=outg;
   }
-   // transmission calculation
-   if (Transmission==0){
-      ABSORB;
-   }else{ 
-     Transmission=exp(-mu*d*N); 
-     p*=Transmission;
-   }
+  // transmission calculation
+  p*=exp(-mu*d*N);
 %}
 
 MCDISPLAY

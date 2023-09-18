@@ -1,7 +1,7 @@
 /*******************************************************************************
 * Instrument: SOLEIL_MARS
 *
-* %I
+* %Identification
 * Written by: IGUILIZ Salah-Eddine, MENUT Denis and FARHI Emmanuel.
 * Date: July 2022
 * Origin: SOLEIL
@@ -10,13 +10,13 @@
 *
 * The MARS beam-line at Synchrotron SOLEIL.
 *
-* %D
+* %Description
 * MARS beamline is aiming to extend the research capabilities on radioactive
 * matter towards the use of synchrotron radiation in multidisciplinary fields
 * biology, chemistry, physics) with respect to national and European safety law*.
 *
 * The design of MARS beamline (infrastructure and optics) is also optimized to
-* alternatively run two experimental stations in order to perform
+* alternatively run two experimental stations in orlder to perform
 * characterizations with transmission and high resolution X-ray powder-diffraction
 * (XRD), Wide Angle X-ray Scattering (WAXS), Small Angle X-ray scattering (SAXS),
 * standard and high resolution X-ray absorption spectroscopy (XANES, EXAFS and
@@ -24,16 +24,19 @@
 *
 * This model implements the XRD station for powders.
 *
-* %Example: E0=16.99 Detector: emon_dcm1_full_range_I=2.50688e11
+* %Example: E0=16.99 Detector: detector_diffraction_I=3.13e+09
 *
-* %P
+* %Parameters
 * E0: [keV]     Central energy to be emitted by the source
-* dEr: [keV]    Relative half width to emitted by the source, e.g. 1e-4
+* dEr: [1]    Relative half width to emitted by the source, e.g. 1e-4
 * alpha: [deg]  Asymmetry angle for the crystals.
-* reflections: [str] List of powder reflections, obtained with e.g. cif2hkl
+* reflections: [str] Sample structure file, LAU/CIF format.
 * reflec_material_M12: [str] reflecting coating on curved mirrors, e.g. Pt
+*
+* %Link
+* https://www.synchrotron-soleil.fr/en/beamlines/mars
 * 
-* %E
+* %End
 *******************************************************************************/
 DEFINE INSTRUMENT SOLEIL_MARS(E0=16.99,
   string reflec_material_M12="Pt.dat",
@@ -53,7 +56,7 @@ DECLARE
 	//Mirror M1
 	double DistanceSourceToM1 = 12.784;
 	double M12_depth = 0.06;
-	double M12_lenght = 2.1;
+	double M12_length = 2.1;
 	double AngleM1 = 0.0031*RAD2DEG;
 
 	//DCM
@@ -115,25 +118,14 @@ DECLARE
 	/* Declarations */
 	
 	double M12_width=0.05;
-
-    double calculated_angle;
-	double z_translation;	
+  double calculated_angle;
 %}
 
 INITIALIZE
 %{
     calculated_angle=RAD2DEG*asin(12398.42*sqrt(8)/(2*5.4309*(E0*1e3)));
-    fprintf(stdout,"Energie %g / Angle %g", E0, calculated_angle);
+    fprintf(stdout,"%s: Energy %g [keV] Mono Angle %g [deg]", NAME_INSTRUMENT, E0, calculated_angle);
     
-    if(calculated_angle==45){
-        z_translation=0;
-    }else{
-        z_translation=(20e-3)/tan(2*calculated_angle*DEG2RAD);
-    }
-    //could also have done:
-    //if 2*calculated_angle<90 deg, z_translation=(20e-3)/tan(2*calculated_angle*DEG2RAD)
-    //else if 2*calculated_angle>90 deg, z_translation=-(20e-3)/tan(pi-2*calculated_angle*DEG2RAD)    
-    fprintf(stdout,"z translation %g", z_translation);
 %}
 
 TRACE
@@ -142,19 +134,18 @@ COMPONENT origin = Progress_bar()
 AT (0, 0, 0) RELATIVE ABSOLUTE
 
 COMPONENT Source = Bending_magnet(
-    E0=E0,   
-    B=1.71,
-    dE = dEr*E0,
     focus_xw=PrimarySlit1Width,
     focus_yh=PrimarySlit1Height,
+    E0=E0, dE = dEr*E0,
+    Ee = 2.75, Ie = 0.5, B = 1.71, sigex=79.6e-6, sigey=25.3e-6,
     dist=DistanceToPrimarySlit1
     )
 AT (0, 0, 0) RELATIVE origin
 
 /*Wavelength*/
-COMPONENT displaySourceLenght = L_monitor(
-  xmin=-0.1, xmax=0.1, ymin=-0.1, ymax=0.1,
-  nL=20, filename="Output1.L", Lmin=0.1, Lmax=8
+COMPONENT displaySourceLength = Monitor_nD(
+  xwidth=0.2, yheight=0.2, options="energy",
+  bins=512, min=E0*(1-dEr), max=E0*(1+dEr)
 )
 AT(0,0,2) RELATIVE Source
 
@@ -187,7 +178,7 @@ AT(0,0,0) RELATIVE PREVIOUS
 ROTATED (0,0, -90) RELATIVE PREVIOUS
 
 COMPONENT mirror_M1 = Mirror_curved(
-    length = M12_lenght,
+    length = M12_length,
     width = M12_width,
     radius = RadiusM1,
     coating=reflec_material_M12)    
@@ -220,7 +211,7 @@ ROTATED (-calculated_angle,0,0) RELATIVE PREVIOUS
 //this dcm is a fixed offset dcm, the second crystal translates itself
 //The  double  crystal  monochromator  (DCM),  manufactured  by  FMB  Oxford,  is  equipped  with  14 independent motorized stages in order to optimize its alignment and then to assure a fixed exit beam over the entire energy range with a constant upward offset of 20 mm with respect to the primary beam. https://iopscience.iop.org/article/10.1088/1742-6596/190/1/012042/pdf
 COMPONENT dcm_xtal1 = COPY(dcm_xtal0)(length=0.02)
-AT(0,20e-3,z_translation) RELATIVE beam_arm_before_crystal
+AT(0,20e-3, calculated_angle ? 20e-3/tan(calculated_angle*DEG2RAD) : 0) RELATIVE dcm_xtal0
 ROTATED (calculated_angle,0,0) RELATIVE dcm0
 
 COMPONENT dcm1 =Arm()
@@ -232,10 +223,10 @@ COMPONENT emon_dcm0 = E_monitor(
 	xwidth=PrimaryBeamMonitorWidth, 
 	yheight=PrimaryBeamMonitorHeight, 
 	filename="emon_dcm0", 
-	Emin=E0-dEr*2, 
-	Emax=E0+dEr*2, 
+	Emin=E0-dEr*E0, 
+	Emax=E0+dEr*E0, 
 	nE=101)
-AT(0,20e-3,DistanceToPrimaryBeamMonitor-DistanceSourceToDCM) RELATIVE beam_arm_before_crystal
+AT(0,0,DistanceToPrimaryBeamMonitor-DistanceSourceToDCM) RELATIVE dcm1
 
 
 /*Visualise*/
@@ -245,9 +236,9 @@ COMPONENT displayMono = PSD_monitor(
 AT(0,0,0) RELATIVE PREVIOUS
 
 /*Wavelength*/
-COMPONENT displayMonoLenght = L_monitor(
-  xmin=-0.1, xmax=0.1, ymin=-0.1, ymax=0.1,
-  nL=20, filename="Output.L", Lmin=0.1, Lmax=8
+COMPONENT displayMonoLength = E_monitor(
+  xwidth=0.2, yheight=0.2,
+  nE=512, filename="Output.E", Emin=E0*(1-dEr), Emax=E0*(1+dEr)
 )
 AT(0,0,0) RELATIVE PREVIOUS
 
@@ -260,7 +251,7 @@ AT(0,0,0) RELATIVE PREVIOUS
 ROTATED (0,0, 90) RELATIVE PREVIOUS
 
 COMPONENT mirror_M2 = Mirror_curved(
-    length = M12_lenght,
+    length = M12_length,
     width = M12_width,
     radius = RadiusM2,
     coating=reflec_material_M12)    
@@ -294,20 +285,10 @@ COMPONENT emon_dcm1 = E_monitor(
 	xwidth=SecondaryBeamMonitorWidth, 
 	yheight=SecondaryBeamMonitorHeight, 
 	filename="BeamMonitor2", 
-	Emin=E0-dEr*2, 
-	Emax=E0+dEr*2, 
+	Emin=E0-dEr*E0, 
+	Emax=E0+dEr*E0, 
 	nE=101)
 AT(0,0,DistanceToSecondaryBeamMonitor-DistanceToSecondarySlit2) RELATIVE PREVIOUS
-
-//full possible range of energy
-COMPONENT emon_dcm1_full_range = E_monitor(
-	xwidth=SecondaryBeamMonitorWidth, 
-	yheight=SecondaryBeamMonitorHeight, 
-	filename="BeamMonitor2_full_e_range", 
-	Emin=3.5, 
-	Emax=35, 
-	nE=101)
-AT(0,0,0) RELATIVE PREVIOUS
 
 /*Visualise*/
 COMPONENT displaySlit2 = PSD_monitor(
@@ -317,21 +298,45 @@ AT(0,0,0) RELATIVE PREVIOUS
 
 
 /*------------------------------------ Sample */
-SPLIT 100 COMPONENT Sample = PowderN(
-  reflections = reflections, material="Si.txt",
+SPLIT 10 COMPONENT Sample = PowderN(
+  reflections = reflections,
   xwidth = 0.005,
   yheight = 0.05,
   zdepth = 0.0001,
-  d_phi=asin(0.02/0.670)*RAD2DEG
+  d_phi=asin(0.02/0.670)*RAD2DEG,
+  p_interact=0.5
 )
 AT (0, 0, DistanceToSample-DistanceToSecondaryBeamMonitor) RELATIVE PREVIOUS
+GROUP samples
+
+// The Rayleigh scattering at E0 is large, and creates massive background.
+// We ignore it here.
+SPLIT 10 COMPONENT SampleF = Fluorescence(
+  material=reflections,
+  xwidth = 0.005,
+  yheight = 0.05,
+  zdepth = 0.0001,
+  focus_ah=asin(0.02/0.670)*RAD2DEG,
+  focus_aw=180, target_z=1, flag_rayleigh=0,
+  p_interact=0.99)
+AT (0, 0, 0) RELATIVE PREVIOUS
+GROUP samples
+
 
 
 /*------------------------------------- detector */
-COMPONENT displayMonoLenght1 = Monitor_nD(
+COMPONENT detector_diffraction = Monitor_nD(
   bins=90000, options="abs theta",
-  min=5,max=90, radius= 0.670, yheight = 0.02
+  min=5,max=90, radius= 0.670, yheight = 0.02, restore_xray=1
 )
+WHEN (0.75 * E0 < K2E*sqrt(kx*kx+ky*ky+kz*kz)) // model detector energy discrimination
+AT(0,0,0) RELATIVE Sample
+
+COMPONENT detector_fluo = Monitor_nD(
+  bins=1024, options="energy", min=0, max=E0*1.2,
+  radius= 0.670, yheight = 0.02
+)
+WHEN (K2E*sqrt(kx*kx+ky*ky+kz*kz) < 0.95*E0)
 AT(0,0,0) RELATIVE Sample
 
 

@@ -1,13 +1,13 @@
 /**********************************************************************************************************************************
 *
-* McXtrace, x-ray tracing package
+* McXtrace, X-ray tracing package
 *         Copyright, All rights reserved
-*         Risoe National Laboratory, Roskilde, Denmark
-*         Institut Laue Langevin, Grenoble, France
+*         DTU Physics, Kgs. Lyngby, Denmark
+*         Synchrotron SOLEIL, Saint-Aubin, France
 *
 * Component: Polycrystal
 *
-* %I
+* %Identification
 * Written by: Martin Cramer Pedersen (mcpe@nbi.dk)
 *
 * Based on code by: Erik Knudsen, Kenichi Oikawa, and Alberto Cereser
@@ -17,13 +17,19 @@
 *
 * Polycrystal made from single crystal-like voxels
 *
-* %D
+* %Description
 * The component creates a threedimensional grid of cubic instances of the Single_crystal-component,through
 * which the rays are propagated. The component relies on a list of possible orientations and stretches of the
 * initial unit cell and a list correlating each voxel of the polycrystal to an entry in the list of rotations
 * and stretches.
 *
-* %P
+* Example: Polycrystal( MapFile= "polycrystal_1layer_2orts.map", OrientationsFile= "stretch_2orts.orts", 
+*   ReflectionsDatafile= "GeReduced.lau", xwidth= 200e-6, yheight= 200e-6, zdepth = 50e-6, 
+*   DeltadOverd = 0.001, Mosaicity = 1, SigmaAbsorbtion  = 0.0, SigmaIncoherent = 0.0, 
+*   MaxNumberOfReflections    = 1, ProbabilityOfTransmission = 0.5, 
+*   ax = 5.6579, ay = 0.0000, az = 0.0000, bx = 0.0000, by = 5.6579, bz = 0.0000, cx = 0.0000, cy = 0.0000, cz = 5.6579 )
+*
+* %Parameters
 * MapFile:                   []     File describing, which orientation is found in which voxel
 * OrientationsFile:          []     File describing the different orientations
 * ReflectionsDatafile:       []     File describing the reflections in the relevant lattice (usually in .lau-format)
@@ -54,7 +60,7 @@
 * Reciprocal:                []     If this parameter is set to 0, then the lattice vectors should be given in real space.
 *                                   Anything else implies that the vectors are given in reciprocal space.
 * verbose:                   []     If nonzero - output more info to the console.
-* %E
+* %End
 ***********************************************************************************************************************************/
 
 DEFINE COMPONENT Polycrystal
@@ -273,9 +279,8 @@ SHARE
         }
 
         if (!FlagMissingFile) {
-            Table_Read(&sTable, ReflectionsDatafile, 1);
-
-            if (sTable.columns < 4) {
+            if (Table_Read(&sTable, ReflectionsDatafile, 1) <= 0 
+               || sTable.columns < 4) {
               fprintf(stderr, "Error (%s): The number of columns in %s should be at least %d for [h, k, l, F2]\n", "ReadReflectionData", ReflectionsDatafile, 4);
               return(-1);
             }
@@ -298,7 +303,7 @@ SHARE
                     "column_l",
                     "column_F",
                     "column_F2",
-                    "Detla_d/d",
+                    "Delta_d/d",
                     "lattice_a",
                     "lattice_b",
                     "lattice_c",

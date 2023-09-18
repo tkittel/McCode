@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+
+#Suppress 'loading xxx configuration' print statement, since it might interfere
+#with printouts of e.g. --version, --showcfg, ...:
+import os
+os.environ['MCCODE_SUPPRESS_LOAD_CONFIG_PRINT_STATEMENT']='1'
+
 from os import mkdir
 from os.path import isfile, isdir, abspath, dirname, basename, join
 from shutil import copyfile
@@ -7,11 +13,13 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 
 from mccode import McStas, Process
-from optimisation import Scanner, LinearInterval, MultiInterval
+from optimisation import Scanner, LinearInterval, MultiInterval, Optimizer
 
-#import config
+# import config
 import sys
-sys.path.append(join(dirname(__file__), '..'))
+
+sys.path.insert(0,join(dirname(__file__), '..'))
+
 from mccodelib import mccode_config
 
 from log import getLogger, setupLogger, setLogLevel, McRunException
@@ -22,9 +30,17 @@ LOG = getLogger('main')
 # File path friendly date format (avoid ':' and white space)
 DATE_FORMAT_PATH = "%Y%m%d_%H%M%S"
 
+# list of scipy default optimizers
+# see: https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+MINIMIZE_METHODS = ['powell', 'nelder-mead', 'cg', 'bfgs', 'newton-cg',
+                    'l-bfgs-b', 'tnc', 'cobyla', 'slsqp', 'trust-constr',
+                    'dogleg', 'trust-ncg', 'trust-exact', 'trust-krylov']
+
+
 # Helper functions
 def build_checker(accept, msg='Invalid value'):
     ''' Build checker from accept() function '''
+
     def checker(option, _opt_str, value, parser):
         ''' value must be acceptable '''
         if not accept(value):
@@ -32,6 +48,7 @@ def build_checker(accept, msg='Invalid value'):
                                    (option, msg, value))
         # Update parser with accepted value
         setattr(parser.values, option.dest, value)
+
     return checker
 
 
@@ -39,59 +56,63 @@ def add_mcrun_options(parser):
     ''' Add option group for McRun options to parser '''
 
     # McRun options
-    opt = OptionGroup(parser, '%s options' % (mccode_config.configuration["MCRUN"]) )
+    opt = OptionGroup(parser, '%s options' % (mccode_config.configuration["MCRUN"]))
     add = opt.add_option
 
     add('-c', '--force-compile',
         action='store_true',
         help='force rebuilding of instrument')
 
+    add('-I',
+        metavar='I',
+        help='Append to McCode search path (implies -c)')
+
     add('--D1',
         metavar='D1',
-        help='set extra -D args (implies -c)')
+        help='Set extra -D args (implies -c)')
 
     add('--D2',
         metavar='D2',
-        help='set extra -D args (implies -c)')
+        help='Set extra -D args (implies -c)')
 
     add('--D3',
         metavar='D3',
-        help='set extra -D args (implies -c)')
+        help='Set extra -D args (implies -c)')
 
     add('-p', '--param',
         metavar='FILE',
-        help='read parameters from file FILE')
+        help='Read parameters from file FILE')
 
     add('-N', '--numpoints',
         type=int, metavar='NP',
-        help='set number of scan points')
+        help='Set number of scan points')
 
     add('-L', '--list',
         action='store_true',
-        help='use a fixed list of points for linear scanning')
+        help='Use a fixed list of points for linear scanning')
 
     add('-M', '--multi',
         action='store_true',
-        help='run a multi-dimensional scan')
+        help='Run a multi-dimensional scan')
 
     add('--autoplot',
         action='store_true',
-        help='open plotter on generated dataset')
-    
+        help='Open plotter on generated dataset')
+
     add('--autoplotter',
         action='store',
         type=str,
-        help='specify the plotter used with --autoplot')
+        help='Specify the plotter used with --autoplot')
 
     add('--embed',
         action='store_true', default=True,
-        help='store copy of instrument file in output directory')
-    
+        help='Store copy of instrument file in output directory')
+
     # Multiprocessing
     add('--mpi',
         metavar='NB_CPU',
-        help='spread simulation over NB_CPU machines using MPI')
-    
+        help='Spread simulation over NB_CPU machines using MPI')
+
     # Accellerator-support
     add('--openacc',
         action='store_true', default=False,
@@ -101,36 +122,94 @@ def add_mcrun_options(parser):
         action='store_true', default=False,
         help='funneling simulation flow, e.g. for mixed CPU/GPU')
 
-
     add('--machines',
         metavar='machines',
-        help='defines path of MPI machinefile to use in parallel mode')
+        help='Defines path of MPI machinefile to use in parallel mode')
 
     # Optimisation
     add('--optimise-file',
         metavar='FILE',
-        help='store scan results in FILE '
+        help='Store scan results in FILE '
              '(defaults to: "mccode.dat")')
 
     add('--no-cflags',
         action='store_true', default=False,
-        help='disable optimising compiler flags for faster compilation')
+        help='Disable optimising compiler flags for faster compilation')
 
     add('--no-main',
         action='store_true', default=False,
-        help='do not generate a main(), e.g. for use with mcstas2vitess.pl. Implies -c')
+        help='Do not generate a main(), e.g. for use with mcstas2vitess.pl. Implies -c')
 
     add('--verbose',
         action='store_true', default=False,
-        help='enable verbose output')
+        help='Enable verbose output')
 
     add('--write-user-config',
         action='store_true', default=False,
-        help='generate a user config file')
+        help='Generate a user config file')
 
     add('--override-config',
         metavar='PATH', default=False,
         help='Load config file from specific dir')
+
+    add('--optimize',
+        action='store_true', default=False,
+        help='Optimize instrument variable parameters to maximize monitors')
+
+    add(
+        "--optimize-maxiter",
+        metavar="optimize_maxiter",
+        type=int,
+        help="Maximum number of optimization iterations to perform",
+        nargs=1,
+    )
+    add(
+        "--optimize-tol",
+        metavar="optimize_tol",
+        type=float,
+        help="Tolerance for optimization termination. When optimize-tol is specified, the selected optimization algorithm sets some relevant solver-specific tolerance(s) equal to optimize-tol",
+        nargs=1,
+    )
+    add(
+        "--optimize-method",
+        metavar='optimize_method',
+        type=str,
+        help='Optimization solver in ' + str(MINIMIZE_METHODS) + '\n' +
+             '(default: ' + MINIMIZE_METHODS[0] + ')' + '\n' +
+             'You can use your custom method method(fun, x0, args, **kwargs, **options). Please refer to scipy documentation for proper use of it:' + '\n' +
+             'https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html?highlight=minimize',
+        nargs=1,
+        default=MINIMIZE_METHODS[0],
+    )
+    add(
+        "--optimize-minimize",
+        action='store_true',
+        help='Choose to minimize the monitors instead of maximize',
+    )
+    add(
+        "--optimize-monitor",
+        metavar="optimize_monitor",
+        type=str,
+        help="Name of a single monitor to optimize (default is to use all)",
+        nargs=1,
+        default="",
+    )
+
+    #    --optimize-maxiter maxiter  max iter of optimization
+    #    --tol tol          tolerance criteria to end the optimization
+    #    --method method    Method to maximize the intensity in ['nelder-mead', 'powell', 'cg', 'bfgs', 'newton-cg', 'l-bfgs-b', 'tnc', 'cobyla', 'slsqp', 'trust-constr', 'dogleg', 'trust-ncg', 'trust-exact', 'trust-krylov']
+    #                       (default: nelder-mead)
+    #                       You can use your own method by entering something else, it will add it as a librairy. Please refer to scipy documentation for proper use of it:
+    #                       https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html?highlight=minimize
+    #    --minimize         choose to minimize the function if needed
+    #    --monitor monitor  monitor name
+
+    cfg_items = ['bindir','libdir','resourcedir','tooldir']
+    cfg_items_prettyprint =   '"%s", and "%s"'%('", "'.join(cfg_items[:-1]),cfg_items[-1])
+    add(
+        "--showcfg", choices=cfg_items, metavar="ITEM",
+        help="Print selected cfg item and exit (paths are resolved and absolute). Allowed values are %s."%cfg_items_prettyprint
+    )
 
     parser.add_option_group(opt)
 
@@ -147,19 +226,20 @@ def add_mcstas_options(parser):
 
     add('-s', '--seed',
         metavar='SEED', type=int, action='callback', callback=check_seed,
-        help='set random seed (must be: SEED != 0)')
+        help='Set random seed (must be: SEED != 0)')
 
     add('-n', '--ncount',
         metavar='COUNT', type=float, default=1000000,
-        help='set number of %s to simulate' % (mccode_config.configuration["PARTICLE"]) )
+        help='Set number of %s to simulate' % (mccode_config.configuration["PARTICLE"]))
 
     add('-t', '--trace',
         action='store_true', default=False,
-        help='enable trace of %s through instrument' % (mccode_config.configuration["PARTICLE"]) )
-    if (mccode_config.configuration["MCCODE"]=='mcstas'):
+        help='Enable trace of %s through instrument' % (mccode_config.configuration["PARTICLE"]))
+
+    if (mccode_config.configuration["MCCODE"] == 'mcstas'):
         add('-g', '--gravitation', '--gravity',
             action='store_true', default=False,
-            help='enable gravitation for all trajectories')
+            help='Enable gravitation for all trajectories')
 
     # Data options
     dir_exists = lambda path: isdir(abspath(path))
@@ -181,19 +261,19 @@ def add_mcstas_options(parser):
     add('-d', '--dir',
         metavar='DIR', type=str,
         action='callback', callback=check_file(exist=False),
-        help='put all data files in directory DIR')
+        help='Put all data files in directory DIR')
 
     add('--format',
         metavar='FORMAT', default='McCode',
-        help='output data files using format FORMAT, usually McCode or NeXus '
+        help='Output data files using format FORMAT, usually McCode or NeXus '
              '(format list obtained from <instr>.%s -h)' % mccode_config.platform["EXESUFFIX"])
 
     # --IDF-option only makes sense in McStas case
-    if (mccode_config.configuration["MCCODE"]=='mcstas'):
+    if (mccode_config.configuration["MCCODE"] == 'mcstas'):
         add('--IDF',
             action='store_true', default=False,
             help='Flag to attempt inclusion of XML-based IDF when --format=NeXus '
-                '(format list obtained from <instr>.%s -h)' % mccode_config.platform["EXESUFFIX"])
+                 '(format list obtained from <instr>.%s -h)' % mccode_config.platform["EXESUFFIX"])
 
     add('--bufsiz',
         metavar='BUFSIZ', default='',
@@ -220,6 +300,14 @@ def add_mcstas_options(parser):
         action='store_true', default=False,
         help='Detailed instrument information')
 
+    add('--list-parameters', action='store_true', default=False,
+        help='Print the instrument parameters to standard out')
+
+    add('--meta-list', action='store_true', default=False, help='Print all metadata defining component names')
+    add('--meta-defined', default=None, help="Print metadata names for component, or indicate if component:name exists")
+    add('--meta-type', default=None, help="Print metadata type for component:name")
+    add('--meta-data', default=None, help="Print metadata for component:name")
+
     parser.add_option_group(opt)
 
 
@@ -233,13 +321,13 @@ def expand_options(options):
     if options.mpi is not None:
         options.use_mpi = True
         if options.openacc is True:
-            options.cc      = mccode_config.compilation['OACC']
+            options.cc = mccode_config.compilation['OACC']
         else:
-            options.cc      = mccode_config.compilation['MPICC']
-        options.mpirun  = mccode_config.compilation['MPIRUN']
+            options.cc = mccode_config.compilation['MPICC']
+        options.mpirun = mccode_config.compilation['MPIRUN']
     elif options.openacc is True:
         options.use_openacc = True
-        options.cc      = mccode_config.compilation['OACC']
+        options.cc = mccode_config.compilation['OACC']
         options.use_mpi = False
     else:
         options.use_mpi = False
@@ -262,6 +350,8 @@ def expand_options(options):
     if options.optimise_file is None:
         # use mccode.dat when unspecified
         options.optimise_file = '%s/mccode.dat' % options.dir
+    if options.optimize:
+        options.optimize_methods = MINIMIZE_METHODS
 
 
 def is_decimal(string):
@@ -286,7 +376,7 @@ def get_parameters(options):
             if len(interval) == 1:
                 fixed_params[key] = value
             else:
-                LOG.debug('interval: %s', interval)
+                LOG.debug('interval[%s]: %s', key, interval)
                 intervals[key] = interval
         else:
             LOG.warning('Ignoring invalid parameter: "%s"', param)
@@ -328,17 +418,23 @@ def main():
     # Parse options
     (options, args) = parser.parse_args()
 
+    if options.showcfg:
+        #For now, all options are actually directly available as keys in the
+        #mccode_config.directories dictionary:
+        assert options.showcfg in mccode_config.directories.keys()
+        print(mccode_config.directories[options.showcfg])
+        raise SystemExit
+
     # Write user config file and exit
     if options.write_user_config:
         mccode_config.save_user_config()
-        quit()
+        raise SystemExit
 
     # Override system and user level config files if prompted
     if options.override_config:
         mccode_config.load_config(options.override_config)
         mccode_config.check_env_vars()
-        
-    
+
     # Extract instrument and parameters
     if len(args) == 0:
         print(parser.get_usage())
@@ -348,7 +444,7 @@ def main():
     options.instr = find_instr_file(args[0])
 
     if options.param:
-        # load params from file 
+        # load params from file
         text = open(options.param).read()
         import re
         params = re.findall('[\w0-9]+=[^=\s]+', text)
@@ -359,8 +455,8 @@ def main():
 
     # On windows, ensure that backslashes in the filename are escaped
     if sys.platform == "win32":
-        options.instr = options.instr.replace("\\","\\\\")
-        
+        options.instr = options.instr.replace("\\", "\\\\")
+
     # Fill out extra information
     expand_options(options)
 
@@ -384,7 +480,8 @@ def main():
     # Indicate end of setup / start of computations
     LOG.info('===')
 
-    if options.info:
+    if options.info or options.list_parameters or \
+            options.meta_list or options.meta_defined or options.meta_type or options.meta_data:
         mcstas.run(override_mpi=False)
         exit()
 
@@ -403,35 +500,27 @@ def main():
         if len(intervals) == 0:
             raise OptionValueError(
                 '--list was chosen but no lists was presented.')
-        pointlist=list(intervals.values())
+        pointlist = list(intervals.values())
         points = len(pointlist[0])
-        if not(all(map(lambda i: len(i) == points, intervals.values()))):
+        if not (all(map(lambda i: len(i) == points, intervals.values()))):
             raise OptionValueError(
                 'All variables much have an equal amount of points.')
         interval_points = LinearInterval.from_list(
             points, intervals)
 
     scan = options.multi or options.numpoints
-    if ((options.numpoints is not None and options.numpoints < 2)
-        or (scan and options.numpoints is None)):
-        raise OptionValueError(
-            ('Cannot scan variable(s) %s using only one data point. '
-             'Please use -N to specify the number of points.') % \
-            ', '.join(intervals.keys()))
-        # Check that input is valid decimals
-        if not all(map(lambda i:
-                       len(i) == 2 and
-                       all(map(is_decimal, i)), intervals.values())):
-            raise OptionValueError('Could not parse intervals -- result: %s'
-                                   % str(intervals))
+    if (options.numpoints is not None and options.numpoints < 2) or (scan and options.numpoints is None):
+        raise OptionValueError((f'Cannot scan variable(s) {", ".join(intervals)} using only one data point. '
+                                'Please use -N to specify the number of points.'))
+    ## ## This *was* unreachable due to its indentation. Should it be removed entirely?
+    # # Check that input is valid decimals
+    # if not all(map(lambda i: len(i) == 2 and all(map(is_decimal, i)), intervals.values())):
+    #     raise OptionValueError(f'Could not parse intervals -- result: {intervals}')
 
     if options.multi is not None:
-        interval_points = MultiInterval.from_range(
-            options.numpoints, intervals)
-
+        interval_points = MultiInterval.from_range(options.numpoints, intervals)
     elif options.numpoints is not None:
-        interval_points = LinearInterval.from_range(
-            options.numpoints, intervals)
+        interval_points = LinearInterval.from_range(options.numpoints, intervals)
 
     # Parameters for linear scanning present
     if interval_points:
@@ -439,15 +528,20 @@ def main():
         scanner.set_points(interval_points)
         if (not options.dir == ''):
             mkdir(options.dir)
-        scanner.run()
+        scanner.run()  # in optimisation.py
+    elif options.optimize:
+        optimizer = Optimizer(mcstas, intervals)
+        if (not options.dir == ''):
+            mkdir(options.dir)
+        optimizer.run()  # in optimisation.py
     else:
         # Only run a simulation if we have a nonzero ncount
         if options.ncount != 0.0 or options.trace:
-            mcstas.run()
+            mcstas.run()  # in mccode.py
 
     if isdir(options.dir):
-        LOG.info('Placing instr file copy %s in dataset %s',options.instr,options.dir)
-        copyfile(options.instr, join(options.dir,basename(options.instr)))
+        LOG.info('Placing instr file copy %s in dataset %s', options.instr, options.dir)
+        copyfile(options.instr, join(options.dir, basename(options.instr)))
 
     if options.autoplot is not None:
         autoplotter = mccode_config.configuration['MCPLOT']
@@ -455,14 +549,16 @@ def main():
         if options.autoplotter is not None:
             autoplotter = options.autoplotter
         if isdir(options.dir):
-            LOG.info('Running plotter %s on dataset %s',autoplotter,options.dir)
+            LOG.info('Running plotter %s on dataset %s', autoplotter, options.dir)
             Process(autoplotter).run([options.dir])
+
 
 if __name__ == '__main__':
     try:
+
         mccode_config.load_config("user")
         mccode_config.check_env_vars()
-        
+
         main()
     except KeyboardInterrupt:
         LOG.fatal('User interrupt.')
